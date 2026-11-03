@@ -14,7 +14,7 @@ Ce projet a été entièrement **vibe-codé**, c'est-à-dire écrit en dialoguan
 Place ce dépôt dans un dossier `testeur_des_fous` à la racine de ta libft, par exemple :
 
 ```bash
-git clone <url-du-dépôt> testeur_des_fous
+git clone https://github.com/SplatchAFK/testeur_des_fous_libft.git testeur_des_fous
 ```
 
 Puis lance :
