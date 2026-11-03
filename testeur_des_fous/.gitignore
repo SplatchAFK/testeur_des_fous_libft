@@ -1,0 +1,5 @@
+*.o
+fous
+a.out
+entrainement/
+__pycache__/

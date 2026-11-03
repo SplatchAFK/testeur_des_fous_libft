@@ -1,0 +1,130 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include "fous.h"
+
+static void	summary(void)
+{
+	int	ok;
+	int	i;
+
+	ok = 0;
+	for (i = 0; i < NFN; i++)
+		ok += g_run.fn[i].st == ST_OK;
+	printf("\n  \033[1;38;2;200;120;255mLe testeur des fous\033[0m · Version Libft · %d/%d"
+		" %s · %s %d · boss %d/3 · %ld Octets\n", ok, NFN, L("fonctions OK", "functions OK"),
+		L("niveau", "level"), level_of(g_save.xp), g_save.boss[0] + g_save.boss[1] + g_save.boss[2],
+		g_save.octets);
+	for (i = 0; i < NFN; i++)
+		if (st_bad(g_run.fn[i].st))
+			printf("  \033[38;2;255;90;100m✘\033[0m ft_%-14s %s%s%s\n", g_fn_name[i],
+				st_label(g_run.fn[i].st), g_run.fn[i].nd ? " · " : "",
+				g_run.fn[i].nd ? g_run.fn[i].detail[0] : "");
+	printf("  %s\n\n", L("Créé et vibe-codé par Splatch (romasant)",
+			"Created and vibe-coded by Splatch (romasant)"));
+}
+
+static int	menu_loop(void)
+{
+	int	i;
+
+	while (1)
+	{
+		i = screen_menu();
+		if (i == 0)
+			return (42);
+		else if (i == 1)
+			screen_train();
+		else if (i == 2)
+			screen_boss_menu();
+		else if (i == 3)
+			screen_shop(0);
+		else if (i == 4)
+			screen_shop(1);
+		else if (i == 5)
+			screen_profile();
+		else if (i == 6 && g_run.loaded)
+			screen_results();
+		else if (i == 7)
+			screen_settings();
+		else if (i == 8)
+			screen_credits();
+		else if (i == 9)
+			return (0);
+	}
+}
+
+int	main(int ac, char **av)
+{
+	const char	*results;
+	char		dir[512];
+	int			pid;
+	int			relance;
+	int			i;
+	int			code;
+	int			bad;
+
+	results = NULL;
+	pid = 0;
+	relance = 0;
+	for (i = 1; i < ac; i++)
+	{
+		if (!strcmp(av[i], "--results") && i + 1 < ac)
+			results = av[++i];
+		else if (!strcmp(av[i], "--pid") && i + 1 < ac)
+			pid = atoi(av[++i]);
+		else if (!strcmp(av[i], "--dir") && i + 1 < ac)
+			g_tester_dir = av[++i];
+		else if (!strcmp(av[i], "--relance"))
+			relance = 1;
+	}
+	snprintf(dir, sizeof(dir), "%s/.testeur_des_fous",
+		getenv("HOME") ? getenv("HOME") : "/tmp");
+	g_savedir = dir;
+	srand(getpid() ^ now_ms());
+	save_load();
+	cfg_export();
+	lib_init();
+	if (!isatty(0) || !isatty(1))
+	{
+		fprintf(stderr, "le testeur des fous a besoin d'un vrai terminal\n");
+		return (2);
+	}
+	term_init();
+	if (term_cols() < 80 || term_rows() < 24)
+	{
+		cls();
+		center(term_rows() / 2, rgb(255, 200, 70), L("Agrandis ton terminal (80 x 24 minimum) puis appuie sur une touche.",
+				"Make your terminal bigger (80 x 24 minimum), then press a key."));
+		flush();
+		while (key_read(100) < 0)
+			;
+	}
+	if (!relance)
+		screen_intro();
+	if (g_save.valid == -1)
+		toast(L("SAUVEGARDE MODIFIÉE À LA MAIN", "SAVE EDITED BY HAND"),
+			L("remise à zéro (ancienne copie : save.txt.triche)", "reset (old copy: save.txt.triche)"),
+			rgb(255, 90, 100));
+	if (g_save.runs == 0)
+		screen_login();
+	if (results)
+	{
+		screen_scan(results, pid);
+		screen_results();
+		boss_battles(-1);
+		screen_rewards();
+	}
+	code = menu_loop();
+	save_write();
+	term_end();
+	if (code == 42)
+		return (42);
+	summary();
+	bad = 0;
+	for (i = 0; i < NFN; i++)
+		bad += st_bad(g_run.fn[i].st) || g_run.fn[i].st == ST_WAIT
+			|| g_run.fn[i].proto != 1;
+	return (results && bad ? 1 : 0);
+}
