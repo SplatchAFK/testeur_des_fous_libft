@@ -169,6 +169,12 @@ emit() { printf '%s\n' "$*" | tr -d '\r' >> "$RES"; }
 SANS=""
 [ "$CFG_ASAN" = 1 ] && SANS="address"
 [ "$CFG_UBSAN" = 1 ] && SANS="${SANS:+$SANS,}undefined"
+san_ok() { echo 'int main(void){return 0;}' | $CC -x c - -fsanitize="$1" -o "$BUILD/san_probe" 2>/dev/null; }
+if [ -n "$SANS" ] && ! san_ok "$SANS"; then
+	SANS_OLD="$SANS"
+	if [ "$SANS" != address ] && san_ok address; then SANS=address; else SANS=""; fi
+	emit "G	sanitizers indisponibles ($SANS_OLD) : repli sur ${SANS:-aucun}"
+fi
 SAN=""
 [ -n "$SANS" ] && SAN="-fsanitize=$SANS -fno-sanitize-recover=all -fno-omit-frame-pointer"
 JOBS="$(nproc 2>/dev/null || echo 4)"
