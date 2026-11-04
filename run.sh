@@ -310,7 +310,7 @@ run_one() {
 		report build "$n" "" 0; ((n_bad++)); return
 	fi
 	if [ ! -f "$bin" ]; then
-		while IFS= read -r l; do det "$l"; done < <(grep -E 'error|undefined|implicit' "$BUILD/bin/$n.err" | sed -E 's/^.*\/(ft_|libft\.h)/\1/' | head -3)
+		while IFS= read -r l; do det "$l"; done < <(grep -E 'error|undefined|implicit|multiple definition|first defined|cannot find' "$BUILD/bin/$n.err" | sed -E 's/^.*\/(ft_|libft\.h)/\1/' | head -3)
 		grep -q 'implicit' "$BUILD/bin/$n.err" && det "piste : prototype absent de libft.h ?"
 		report build "$n" "" 0; ((n_bad++)); return
 	fi
