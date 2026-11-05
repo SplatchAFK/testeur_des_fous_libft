@@ -59,15 +59,20 @@ static void	stars_tick(int draw)
 
 int	st_bad(int st)
 {
-	return (st != ST_OK && st != ST_WAIT);
+	return (st != ST_OK && st != ST_WAIT && st != ST_WARN);
+}
+
+int	st_pass(int st)
+{
+	return (st == ST_OK || st == ST_WARN);
 }
 
 const char	*st_label(int st)
 {
 	static const char	*l[] = {"...", "OK", "FAUX", "CRASH", "FUITE", "UB",
-		"BOUCLE", "COMPIL", "ABSENT"};
+		"BOUCLE", "COMPIL", "ABSENT", "NOTE"};
 	static const char	*e[] = {"...", "OK", "WRONG", "CRASH", "LEAK", "UB",
-		"LOOP", "BUILD", "MISSING"};
+		"LOOP", "BUILD", "MISSING", "NOTE"};
 
 	return (L(l[st], e[st]));
 }
@@ -88,6 +93,8 @@ t_rgb	st_color(int st)
 		return (rgb(110, 190, 255));
 	if (st == ST_SKIP)
 		return (rgb(110, 110, 130));
+	if (st == ST_WARN)
+		return (rgb(190, 230, 90));
 	return (theme()->dim);
 }
 
@@ -96,7 +103,7 @@ int	part_clean(int p)
 	int	i;
 
 	for (i = g_bosses[p].first; i <= g_bosses[p].last; i++)
-		if (g_run.fn[i].st != ST_OK)
+		if (!st_pass(g_run.fn[i].st))
 			return (0);
 	return (1);
 }
@@ -104,10 +111,10 @@ int	part_clean(int p)
 static int	st_parse(const char *s)
 {
 	static const char	*n[] = {"wait", "ok", "ko", "crash", "leak", "ub",
-		"time", "build", "skip"};
+		"time", "build", "skip", "warn"};
 	int					i;
 
-	for (i = 0; i < 9; i++)
+	for (i = 0; i < 10; i++)
 		if (!strcmp(n[i], s))
 			return (i);
 	return (ST_KO);
@@ -129,18 +136,41 @@ static int	split_tab(char *s, char **f, int max)
 	return (n);
 }
 
+/* coupe proprement un texte UTF-8 tronqué par snprintf */
+static void	utf8_fix(char *s)
+{
+	size_t			n;
+	size_t			k;
+	unsigned char	c;
+	size_t			need;
+
+	n = strlen(s);
+	k = n;
+	while (k > 0 && ((unsigned char)s[k - 1] & 0xC0) == 0x80)
+		k--;
+	if (k > 0 && (unsigned char)s[k - 1] >= 0xC0)
+	{
+		c = (unsigned char)s[k - 1];
+		need = c >= 0xF0 ? 4 : (c >= 0xE0 ? 3 : 2);
+		if (n - (k - 1) < need)
+			s[k - 1] = '\0';
+	}
+}
+
 static void	parse_line(char *line)
 {
-	char	*f[12];
+	char	*f[16];
 	char	*cut;
 	int		n;
 	int		i;
 	int		k;
 	t_res	*r;
 
-	n = split_tab(line, f, 12);
+	n = split_tab(line, f, 16);
 	if (!strcmp(f[0], "END"))
 		g_run.done = 1;
+	else if (!strcmp(f[0], "AD"))
+		g_run.audit_done = 1;
 	else if (!strcmp(f[0], "PD"))
 		g_run.protos_done = 1;
 	else if (!strcmp(f[0], "S") && n > 1)
@@ -155,9 +185,9 @@ static void	parse_line(char *line)
 			cut = strstr(f[3], "   attendu");
 			if (cut)
 				*cut = '\0';
-			snprintf(g_run.fn[k].detail[g_run.fn[k].nd++], 160, "prototype %s", f[3]);
+			snprintf(g_run.fn[k].detail[g_run.fn[k].nd++], 200, "prototype %s", f[3]);
 			if (cut)
-				snprintf(g_run.fn[k].detail[g_run.fn[k].nd++], 160, "          %s", cut + 3);
+				snprintf(g_run.fn[k].detail[g_run.fn[k].nd++], 200, "          %s", cut + 3);
 		}
 	}
 	else if (!strcmp(f[0], "T") && n > 4 && (k = fn_index(f[1])) >= 0)
@@ -166,12 +196,15 @@ static void	parse_line(char *line)
 		r->st = st_parse(f[2]);
 		r->checks = atoi(f[3]);
 		r->ms = atoi(f[4]);
-		for (i = 5; i < n && r->nd < 6; i++)
+		for (i = 5; i < n && r->nd < 8; i++)
 			if (f[i][0])
-				snprintf(r->detail[r->nd++], 160, "%s", f[i]);
+			{
+				snprintf(r->detail[r->nd], 200, "%s", f[i]);
+				utf8_fix(r->detail[r->nd++]);
+			}
 		g_run.tests_done++;
 	}
-	else if (!strcmp(f[0], "A") && n > 2 && g_run.naudit < 24)
+	else if (!strcmp(f[0], "A") && n > 2 && g_run.naudit < 32)
 	{
 		g_run.audit[g_run.naudit].st = !strcmp(f[1], "ok") ? ST_OK
 			: (!strcmp(f[1], "warn") ? ST_LEAK : ST_KO);
@@ -222,6 +255,8 @@ void	toast(const char *title, const char *msg, t_rgb c)
 		k = (t < 250 && !anim_off()) ? t / 250.0 : 1.0;
 		x = (term_cols() - w) / 2;
 		y = (int)(-4 + 5 * k);
+		if (y > 0)
+			fill(x, 0, w, y, theme()->bg);
 		if (y >= 0)
 		{
 			fill(x, y, w, 4, mix(theme()->bg, c, 0.25));
@@ -273,6 +308,8 @@ void	screen_intro(void)
 			snprintf(sub, sizeof(sub), "%.*s", k, sub_full);
 			center(cy + 12, theme()->accent2, sub);
 		}
+		if (t > 2.2)
+			center(cy + 13, theme()->dim, "v" TDF_VERSION "  ·  " TDF_DATE);
 		if (t > 2.6)
 			center(cy + 14, mix(theme()->bg, theme()->text, (t - 2.6) / 0.9), cred);
 		if (t > 3.4 && ((int)(t * 2.5)) % 2)
@@ -299,7 +336,7 @@ static void	tile(int x, int y, int i, long now)
 	c = st_color(st);
 	dt = g_reveal[i] ? now - g_reveal[i] : 99999;
 	sx = 0;
-	if (st != ST_OK && st != ST_WAIT && dt < 500 && !anim_off())
+	if (st_bad(st) && dt < 500 && !anim_off())
 		sx = (int)(2 * sin(dt / 25.0));
 	b = mix(theme()->bg, c, 0.22);
 	if (dt < 350 && !anim_off())
@@ -320,21 +357,20 @@ static void	tile(int x, int y, int i, long now)
 		: (r->proto == 1 ? rgb(80, 230, 140) : theme()->dim));
 	out(r->proto ? "▌" : " ");
 	fg(c);
-	snprintf(name, sizeof(name), "%-12.12s", g_fn_name[i]);
+	snprintf(name, sizeof(name), "%-13.13s", g_fn_name[i]);
 	out(name);
 	if (st == ST_WAIT && g_run.current == i)
 		outf("%s", (const char *[]){"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}[(now / 80) % 10]);
-	else if (st == ST_OK)
+	else if (st_pass(st))
 	{
 		if (dt < 400)
 			fg(rgb(255, 230, 120));
-		out(dt < 400 ? "★" : "✔");
+		out(dt < 400 ? "★" : (st == ST_WARN ? "≈" : "✔"));
 	}
 	else if (st == ST_WAIT)
 		out("·");
 	else
 		out("✘");
-	out(" ");
 	bgc(theme()->bg);
 }
 
@@ -398,7 +434,7 @@ static void	counts(int *ok, int *bad, int *done)
 	{
 		if (!g_shown[i])
 			continue ;
-		*ok += g_run.fn[i].st == ST_OK;
+		*ok += st_pass(g_run.fn[i].st);
 		*bad += st_bad(g_run.fn[i].st);
 		*done += g_run.fn[i].st != ST_WAIT;
 	}
@@ -425,22 +461,47 @@ static int	reveal_next(long now)
 	return (-1);
 }
 
+static void	fmt_num(long v, char *buf, size_t sz)
+{
+	char	t[32];
+	int		i;
+	int		n;
+	int		len;
+
+	snprintf(t, sizeof(t), "%ld", v);
+	len = (int)strlen(t);
+	n = 0;
+	for (i = 0; i < len && n < (int)sz - 2; i++)
+	{
+		if (i && (len - i) % 3 == 0)
+			buf[n++] = ' ';
+		buf[n++] = t[i];
+	}
+	buf[n] = '\0';
+}
+
 void	screen_scan(const char *path, int pid)
 {
 	long	off;
 	long	now;
 	long	t0;
 	long	doneat;
+	long	tfirst;
+	long	chk;
 	int		ok;
 	int		bad;
 	int		done;
 	int		i;
+	int		j;
 	int		k;
 	char	tmp[200];
+	char	num[40];
+	char	eta[40];
 
 	off = 0;
 	t0 = now_ms();
 	doneat = 0;
+	tfirst = 0;
 	memset(g_shown, 0, sizeof(g_shown));
 	cls();
 	while (1)
@@ -467,6 +528,28 @@ void	screen_scan(const char *path, int pid)
 		draw_grid(now, -1);
 		counts(&ok, &bad, &done);
 		layout(&k, &i);
+		if (done > 0 && !tfirst)
+			tfirst = now;
+		chk = 0;
+		for (j = 0; j < NFN; j++)
+			if (g_shown[j] && g_run.fn[j].st != ST_WAIT)
+				chk += g_run.fn[j].checks;
+		fmt_num(chk, num, sizeof(num));
+		if (done >= NFN)
+			snprintf(eta, sizeof(eta), "%s", L("terminé", "done"));
+		else if (done >= 3)
+			snprintf(eta, sizeof(eta), L("reste ~%lds", "~%lds left"),
+				(now - tfirst) / 1000 * (NFN - done) / done + 1);
+		else
+			snprintf(eta, sizeof(eta), "%s", "...");
+		if (g_run.current >= 0)
+			snprintf(tmp, sizeof(tmp), "%3d %%  ·  ft_%s  ·  %s %s  ·  %s", done * 100 / NFN,
+				g_fn_name[g_run.current], num, L("contrôles", "checks"), eta);
+		else
+			snprintf(tmp, sizeof(tmp), "%3d %%  ·  %s  ·  %s %s  ·  %s", done * 100 / NFN,
+				L("compilation et préparation", "compiling and preparing"), num,
+				L("contrôles", "checks"), eta);
+		center(i + 18, theme()->text, tmp);
 		bar(k, i + 19, 62, done / (double)NFN, theme()->accent, theme()->accent2);
 		at(k, i + 20);
 		fg(rgb(80, 230, 140));
@@ -515,7 +598,14 @@ static int	moulinette_ok(char *why, size_t n)
 			snprintf(why, n, "audit : %s", g_run.audit[i].label);
 			return (0);
 		}
-	if (!g_run.naudit)
+	for (i = 0; i < g_run.naudit; i++)
+		if (!strncmp(g_run.audit[i].label, "norminette introuvable", 22)
+			|| !strncmp(g_run.audit[i].label, "norminette désactivée", 22))
+		{
+			snprintf(why, n, "%s", L("norminette pas vérifiée", "norminette not checked"));
+			return (0);
+		}
+	if (!g_run.audit_done)
 	{
 		snprintf(why, n, "%s", L("audit non lancé", "audit not run"));
 		return (0);
@@ -548,48 +638,364 @@ static void	detail_panel(int sel, int y)
 	}
 }
 
-static void	audit_view(void)
+static int	audit_lines(char lines[][200], int *kind, int max)
 {
-	int		i;
-	int		x;
-	int		y;
-	char	tmp[260];
+	int	n;
+	int	i;
 
-	cls();
-	x = (term_cols() - 76) / 2;
-	if (x < 0)
-		x = 0;
-	text_at(x, 1, theme()->accent, L("AUDIT · CE QUE LA MOULINETTE REGARDE", "AUDIT · WHAT THE MOULINETTE CHECKS"));
-	y = 3;
-	if (!g_run.naudit)
-		text_at(x, y++, theme()->dim, L("L'audit se lance quand les 43 fonctions sont propres (réglable dans Paramètres).",
-				"The audit runs once the 43 functions are clean (see Settings)."));
-	for (i = 0; i < g_run.naudit && y < term_rows() - 3; i++)
+	n = 0;
+	if (!g_run.audit_done && n < max)
 	{
-		at(x, y);
-		bgc(st_color(g_run.audit[i].st));
-		fg(rgb(10, 10, 10));
-		outf(" %-5s ", g_run.audit[i].st == ST_OK ? "OK" : (g_run.audit[i].st == ST_KO ? L("FAUX", "FAIL") : "WARN"));
-		bgc(theme()->bg);
-		fg(theme()->text);
-		outf("  %s", g_run.audit[i].label);
-		y++;
-		if (g_run.audit[i].detail[0])
+		kind[n] = -1;
+		snprintf(lines[n++], 200, "%s", L("L'audit complet se lance quand les 43 fonctions sont propres.",
+				"The full audit runs once the 43 functions are clean."));
+	}
+	for (i = 0; i < g_run.naudit && n < max; i++)
+	{
+		kind[n] = g_run.audit[i].st;
+		snprintf(lines[n++], 200, "%s", g_run.audit[i].label);
+		if (g_run.audit[i].detail[0] && n < max)
 		{
-			snprintf(tmp, sizeof(tmp), "         %.66s", g_run.audit[i].detail);
-			text_at(x, y++, theme()->dim, tmp);
+			kind[n] = -2;
+			snprintf(lines[n++], 200, "%s", g_run.audit[i].detail);
 		}
 	}
-	for (i = 0; i < g_run.nwarn && y < term_rows() - 2; i++)
+	for (i = 0; i < g_run.nwarn && n < max; i++)
 	{
-		snprintf(tmp, sizeof(tmp), "! %.74s", g_run.warn[i]);
-		text_at(x, ++y, rgb(255, 200, 70), tmp);
+		kind[n] = -3;
+		snprintf(lines[n++], 200, "%s", g_run.warn[i]);
 	}
-	text_at(x, term_rows() - 2, theme()->dim, L("[ une touche pour revenir ]", "[ any key to go back ]"));
-	flush();
-	while (key_read(100) < 0)
-		;
+	return (n);
+}
+
+static void	audit_view(void)
+{
+	static char	lines[96][200];
+	int			kind[96];
+	int			n;
+	int			top;
+	int			h;
+	int			i;
+	int			k;
+	int			x;
+	int			w;
+
+	n = audit_lines(lines, kind, 96);
+	top = 0;
 	cls();
+	while (1)
+	{
+		x = (term_cols() - 78) / 2;
+		if (x < 0)
+			x = 0;
+		w = term_cols() - x - 1;
+		h = term_rows() - 5;
+		bgc(theme()->bg);
+		out("\033[2J");
+		text_at(x, 1, theme()->accent, L("AUDIT · CE QUE LA MOULINETTE REGARDE", "AUDIT · WHAT THE MOULINETTE CHECKS"));
+		for (i = 0; i < h && top + i < n; i++)
+		{
+			k = kind[top + i];
+			if (k >= 0)
+			{
+				at(x, 3 + i);
+				bgc(st_color(k));
+				fg(rgb(10, 10, 10));
+				outf(" %-5s ", k == ST_OK ? "OK" : (k == ST_KO ? L("FAUX", "FAIL") : "WARN"));
+				bgc(theme()->bg);
+				text_clip(x + 9, 3 + i, theme()->text, lines[top + i], w - 9);
+			}
+			else if (k == -2)
+				text_clip(x + 9, 3 + i, theme()->dim, lines[top + i], w - 9);
+			else if (k == -3)
+			{
+				text_at(x, 3 + i, rgb(255, 200, 70), "!");
+				text_clip(x + 2, 3 + i, rgb(255, 200, 70), lines[top + i], w - 2);
+			}
+			else
+				text_clip(x, 3 + i, theme()->dim, lines[top + i], w);
+		}
+		if (n > h)
+		{
+			at(x, term_rows() - 2);
+			fg(theme()->accent2);
+			outf(L("lignes %d-%d sur %d   ▲ ▼ défiler   ", "lines %d-%d of %d   ▲ ▼ scroll   "),
+				top + 1, top + i, n);
+		}
+		else
+			at(x, term_rows() - 2);
+		fg(theme()->dim);
+		out(L("[ Échap / Entrée : revenir ]", "[ Esc / Enter: back ]"));
+		flush();
+		k = key_dir(key_read(100));
+		if (k < 0)
+			continue ;
+		if (k == 1001 && top + h < n)
+			top++;
+		else if (k == 1000 && top > 0)
+			top--;
+		else if (k != 1001 && k != 1000 && k != 1002 && k != 1003)
+			break ;
+	}
+	cls();
+}
+
+#define FICHE_MAX 90
+
+static void	fiche_add(char lines[][220], int *kind, int *n, int w, int k, const char *s)
+{
+	const char	*e;
+	const char	*sp;
+	const char	*ind;
+	int			cols;
+	int			len;
+	int			first;
+	int			wmax;
+
+	if (w < 10)
+		w = 10;
+	ind = (!strncmp(s, "• ", strlen("• ")) || !strncmp(s, "  ↳", strlen("  ↳"))) ? "    " : "";
+	first = 1;
+	while (*s && *n < FICHE_MAX)
+	{
+		wmax = first ? w : w - (int)strlen(ind);
+		cols = 0;
+		sp = NULL;
+		e = s;
+		while (*e && (cols < wmax || (((unsigned char)*e & 0xC0) == 0x80)))
+		{
+			if (*e == ' ')
+				sp = e;
+			if (((unsigned char)*e & 0xC0) != 0x80)
+				cols++;
+			e++;
+		}
+		if (*e && sp && sp > s)
+			e = sp;
+		len = (int)(e - s);
+		if (len > 210)
+			len = 210;
+		snprintf(lines[*n], 220, "%s%.*s", first ? "" : ind, len, s);
+		first = 0;
+		utf8_fix(lines[*n]);
+		kind[(*n)++] = k;
+		s = e;
+		while (*s == ' ')
+			s++;
+	}
+}
+
+/* un conseil par type de problème (jamais de code à ta place) */
+static const char	*fiche_hint(int st, const char *all, int which)
+{
+	static const char	*fr[] = {
+		"Ton malloc demande plus de place que le résultat n'en utilise. Calcule d'abord la taille exacte du résultat (+ 1 pour le '\\0'), puis fais le malloc avec cette taille. Tripouille le refuse aussi (MKO).",
+		"Ton malloc ne laisse pas assez de place (le '\\0' final ?). Recompte la taille avant de remplir le bloc.",
+		"Un free vise un bloc déjà libéré, jamais alloué, ou une chaîne littérale. Cherche le double free et les free d'arguments.",
+		"Ta fonction libère une mémoire qu'elle n'a pas allouée (un de ses arguments). Elle ne doit libérer que ce qu'elle a elle-même alloué.",
+		"Des blocs alloués ne sont jamais libérés. Regarde les chemins d'erreur et les résultats intermédiaires.",
+		"Teste chaque malloc. S'il échoue : libère tout ce qui est déjà alloué (par exemple les mots précédents d'un split) et renvoie NULL.",
+		"Tu lis ou écris hors d'un bloc. Vérifie la taille allouée, la condition de boucle et le '\\0' final.",
+		"Comportement indéfini : variable non initialisée, dépassement d'entier, pointeur NULL ou décalage invalide. La ligne est indiquée plus haut.",
+		"Boucle infinie : vérifie la condition d'arrêt (le '\\0', un compteur qui avance).",
+		"Le fichier ne compile pas avec -Wall -Wextra -Werror : corrige l'erreur indiquée plus haut.",
+		"Compare la ligne « attendu » avec ce que ta fonction renvoie sur ce cas précis, puis rejoue-le seul avec la commande ci-dessous."};
+	static const char	*en[] = {
+		"Your malloc asks for more room than the result uses. Compute the exact result size first (+1 for the '\\0'), then malloc that. Tripouille rejects it too (MKO).",
+		"Your malloc leaves too little room (the final '\\0'?). Recount the size before filling the block.",
+		"A free targets a block already freed, never allocated, or a string literal. Look for double frees and frees of arguments.",
+		"Your function frees memory it did not allocate (one of its arguments). It must only free what it allocated itself.",
+		"Allocated blocks are never freed. Check the error paths and the intermediate results.",
+		"Check every malloc. If one fails: free everything already allocated (e.g. the previous words of a split) and return NULL.",
+		"You read or write outside a block. Check the allocated size, the loop condition and the final '\\0'.",
+		"Undefined behavior: uninitialized variable, integer overflow, NULL pointer or invalid shift. The line is shown above.",
+		"Infinite loop: check the stop condition (the '\\0', a counter that advances).",
+		"The file does not compile with -Wall -Wextra -Werror: fix the error shown above.",
+		"Compare the \"expected\" line with what your function returns on this exact case, then replay it alone with the command below."};
+	int					id;
+
+	id = -1;
+	if (which == 0 && strstr(all, "trop grand"))
+		id = 0;
+	else if (which == 1 && strstr(all, "trop petit"))
+		id = 1;
+	else if (which == 2 && (strstr(all, "n'est pas alloué") || strstr(all, "n'est plus un bloc")))
+		id = 2;
+	else if (which == 3 && strstr(all, "ne lui appartient"))
+		id = 3;
+	else if (which == 4 && (st == ST_LEAK || strstr(all, "jamais libérés") || strstr(all, "jamais passés à del")))
+		id = 4;
+	else if (which == 5 && strstr(all, "quand malloc"))
+		id = 5;
+	else if (which == 6 && (strstr(all, "buffer-overflow") || strstr(all, "use-after")
+			|| strstr(all, "SEGV") || strstr(all, "plantage")))
+		id = 6;
+	else if (which == 7 && (st == ST_UB || strstr(all, "runtime error")))
+		id = 7;
+	else if (which == 8 && st == ST_TIME)
+		id = 8;
+	else if (which == 9 && st == ST_BUILD)
+		id = 9;
+	else if (which == 10 && st == ST_KO && !strstr(all, "malloc"))
+		id = 10;
+	if (id < 0)
+		return (NULL);
+	return (L(fr[id], en[id]));
+}
+
+static int	fiche_build(int fn, char lines[][220], int *kind, int w)
+{
+	t_res		*r;
+	char		d[220];
+	char		all[1700];
+	char		tmp[260];
+	char		*cas;
+	char		*att;
+	const char	*h;
+	int			n;
+	int			i;
+
+	r = &g_run.fn[fn];
+	n = 0;
+	all[0] = '\0';
+	for (i = 0; i < r->nd; i++)
+	{
+		strncat(all, r->detail[i], sizeof(all) - strlen(all) - 2);
+		strcat(all, " ");
+	}
+	fiche_add(lines, kind, &n, w, 5, L("CE QUI A ÉTÉ VU", "WHAT WAS SEEN"));
+	if (!r->nd)
+		fiche_add(lines, kind, &n, w, 0, st_pass(r->st)
+			? L("Rien à signaler : toutes les vérifications passent.", "Nothing to report: every check passes.")
+			: L("Pas de détail pour cette fonction.", "No details for this function."));
+	for (i = 0; i < r->nd; i++)
+	{
+		snprintf(d, sizeof(d), "%s", r->detail[i]);
+		cas = strstr(d, "  · cas : ");
+		if (cas)
+			*cas = '\0';
+		att = strstr(d, ", attendu ");
+		if (!att)
+			att = strstr(d, ", la libc ");
+		if (!att)
+			att = strstr(d, ", libc says ");
+		if (att)
+			*att = '\0';
+		snprintf(tmp, sizeof(tmp), "• %s", d);
+		fiche_add(lines, kind, &n, w, 0, tmp);
+		if (att)
+		{
+			snprintf(tmp, sizeof(tmp), "  ↳ %s", strstr(r->detail[i], ", attendu ")
+				? strstr(r->detail[i], ", attendu ") + 2
+				: (strstr(r->detail[i], ", la libc ") ? strstr(r->detail[i], ", la libc ") + 2
+					: strstr(r->detail[i], ", libc says ") + 2));
+			if ((cas = strstr(tmp, "  · cas : ")))
+				*cas = '\0';
+			fiche_add(lines, kind, &n, w, 2, tmp);
+		}
+		cas = strstr(r->detail[i], "  · cas : ");
+		if (cas)
+		{
+			snprintf(tmp, sizeof(tmp), "  ↳ %s : %s", L("cas", "case"), cas + strlen("  · cas : "));
+			fiche_add(lines, kind, &n, w, 3, tmp);
+		}
+	}
+	h = NULL;
+	for (i = 0; i <= 10 && !h; i++)
+		h = fiche_hint(r->st, all, i);
+	if (h)
+	{
+		fiche_add(lines, kind, &n, w, 5, L("PISTE", "HINT"));
+		fiche_add(lines, kind, &n, w, 4, h);
+	}
+	fiche_add(lines, kind, &n, w, 5, L("POUR LE REJOUER SEUL", "TO REPLAY IT ALONE"));
+	snprintf(tmp, sizeof(tmp), "bash testeur_des_fous/run.sh --ci -v %s", g_fn_name[fn]);
+	fiche_add(lines, kind, &n, w, 6, tmp);
+	return (n);
+}
+
+static int	screen_fiche(int fn)
+{
+	static char	lines[FICHE_MAX][220];
+	int			kind[FICHE_MAX];
+	int			n;
+	int			top;
+	int			h;
+	int			i;
+	int			k;
+	int			x;
+	int			w;
+	int			j;
+	t_res		*r;
+	char		tmp[200];
+
+	top = 0;
+	cls();
+	while (1)
+	{
+		x = (term_cols() - 78) / 2;
+		if (x < 0)
+			x = 0;
+		w = term_cols() - x - 3;
+		if (w > 74)
+			w = 74;
+		n = fiche_build(fn, lines, kind, w);
+		h = term_rows() - 6;
+		if (top > n - h)
+			top = n - h > 0 ? n - h : 0;
+		r = &g_run.fn[fn];
+		bgc(theme()->bg);
+		out("\033[2J");
+		snprintf(tmp, sizeof(tmp), L("FICHE · ft_%s", "DETAILS · ft_%s"), g_fn_name[fn]);
+		text_at(x, 1, theme()->accent2, tmp);
+		at(x, 2);
+		bgc(st_color(r->st));
+		fg(rgb(10, 10, 10));
+		outf(" %-6s ", st_label(r->st));
+		bgc(theme()->bg);
+		fg(theme()->dim);
+		if (r->checks)
+			outf(L("   %d contrôles  %d.%02ds", "   %d checks  %d.%02ds"), r->checks,
+				r->ms / 1000, r->ms % 1000 / 10);
+		for (i = 0; i < h && top + i < n; i++)
+		{
+			k = kind[top + i];
+			text_clip(x, 4 + i, k == 5 ? theme()->accent : (k == 2 ? rgb(80, 230, 140)
+					: (k == 3 ? theme()->dim : (k == 4 ? theme()->accent2
+							: (k == 6 ? rgb(255, 230, 140) : theme()->text)))),
+				lines[top + i], term_cols() - x - 1);
+		}
+		at(x, term_rows() - 1);
+		fg(theme()->accent2);
+		if (n > h)
+			outf(L("lignes %d-%d sur %d   ▲ ▼ défiler   ", "lines %d-%d of %d   ▲ ▼ scroll   "),
+				top + 1, top + i, n);
+		fg(theme()->dim);
+		out(L("◀ ▶ autre fonction en échec   Échap : retour", "◀ ▶ other failing function   Esc: back"));
+		flush();
+		k = key_dir(key_read(100));
+		if (k < 0)
+			continue ;
+		if (k == 1001 && top + h < n)
+			top++;
+		else if (k == 1000 && top > 0)
+			top--;
+		else if (k == 1002 || k == 1003)
+		{
+			for (j = fn + (k == 1002 ? 1 : -1); j >= 0 && j < NFN; j += (k == 1002 ? 1 : -1))
+				if (st_bad(g_run.fn[j].st) || g_run.fn[j].proto > 1)
+					break ;
+			if (j >= 0 && j < NFN)
+			{
+				fn = j;
+				top = 0;
+			}
+		}
+		else if (k != 1001 && k != 1000)
+			break ;
+	}
+	cls();
+	return (fn);
 }
 
 void	screen_results(void)
@@ -625,15 +1031,24 @@ void	screen_results(void)
 		center(1, m ? rgb(80, 230, 140) : rgb(255, 90, 100), tmp);
 		center(2, theme()->dim, why);
 		draw_grid(now_ms(), sel);
-		detail_panel(sel, y + 18);
+		detail_panel(sel, y + 17);
 		text_at(x, term_rows() - 1, theme()->dim,
-			L("flèches : choisir   a : audit   Entrée : continuer", "arrows: pick   a: audit   Enter: continue"));
+			L("flèches : choisir   f : fiche   m : audit   Entrée : continuer",
+				"arrows: pick   f: details   m: audit   Enter: continue"));
 		flush();
 		k = key_read(60);
 		if (k == '\r' || k == '\n' || k == ' ' || k == 27)
 			break ;
-		if (k == 'a')
+		if (k == 'f')
+		{
+			sel = screen_fiche(sel);
+			continue ;
+		}
+		if (k == 'm' || (k == 'a' && g_save.cfg.keys != 1))
+		{
 			audit_view();
+			continue ;
+		}
 		k = key_dir(k);
 		if (k == 1002 && sel < NFN - 1)
 			sel++;
@@ -691,6 +1106,11 @@ static void	fireworks(int ms)
 			r = (t % 700) / 60.0;
 			for (a = 0; a < 6.28; a += 0.5)
 			{
+				if (cx[i] + (int)(cos(a) * r * 2) < 0
+					|| cx[i] + (int)(cos(a) * r * 2) >= term_cols()
+					|| cy[i] + (int)(sin(a) * r) < 0
+					|| cy[i] + (int)(sin(a) * r) >= term_rows())
+					continue ;
 				at(cx[i] + (int)(cos(a) * r * 2), cy[i] + (int)(sin(a) * r));
 				fg(mix(hue(i / 5.0 + a / 6.28), theme()->bg, (t % 700) / 700.0));
 				out(r > 8 ? " " : "✦");
@@ -732,7 +1152,7 @@ void	screen_rewards(void)
 	allproto = 1;
 	for (i = 0; i < NFN; i++)
 	{
-		if (g_run.fn[i].st == ST_OK)
+		if (st_pass(g_run.fn[i].st))
 		{
 			clean++;
 			if (g_save.cleared[i] != '1')
@@ -811,14 +1231,14 @@ void	screen_rewards(void)
 		ach_give(2);
 	if (allproto)
 		ach_give(3);
-	if (g_run.naudit)
+	if (g_run.audit_done)
 	{
 		for (i = 0; i < g_run.naudit && g_run.audit[i].st != ST_KO; i++)
 			;
 		if (i == g_run.naudit)
 			ach_give(4);
 	}
-	if (g_run.fn[E_memmove].st == ST_OK)
+	if (st_pass(g_run.fn[E_memmove].st))
 		ach_give(6);
 	if (g_save.runs >= 10)
 		ach_give(16);
@@ -939,7 +1359,7 @@ void	screen_profile(void)
 	snprintf(tmp, sizeof(tmp), L("runs %d · boss %d/3 · entraînement %d/21 · objets %d/%d · titres %d/1000 · crashs %d",
 			"runs %d · bosses %d/3 · training %d/21 · items %d/%d · titles %d/1000 · crashes %d"),
 		g_save.runs, g_save.boss[0] + g_save.boss[1] + g_save.boss[2],
-		(int)(strlen(g_save.exo) - (strchr(g_save.exo, '0') ? strlen(strchr(g_save.exo, '0')) : 0)),
+		exo_done_count(),
 		n, g_nitems, m, g_save.crashes);
 	center(6, theme()->dim, tmp);
 	for (i = 0; i < NFN; i++)
@@ -952,17 +1372,11 @@ void	screen_profile(void)
 	text_at(x, y++, theme()->accent, L("SUCCÈS", "ACHIEVEMENTS"));
 	for (i = 0; i < NACH && y + i / 2 < term_rows() - 2; i++)
 	{
-		at(x + (i % 2) * 41, y + i / 2);
-		if (ach_has(i))
-		{
-			fg(rgb(255, 215, 0));
-			outf("★ %s", L(g_ach_fr[i][0], g_ach_en[i][0]));
-		}
-		else
-		{
-			fg(theme()->dim);
-			outf("☆ %s", L(g_ach_fr[i][1], g_ach_en[i][1]));
-		}
+		snprintf(tmp, sizeof(tmp), "%s %s", ach_has(i) ? "★" : "☆", ach_has(i)
+			? L(g_ach_fr[i][0], g_ach_en[i][0]) : L(g_ach_fr[i][1], g_ach_en[i][1]));
+		text_clip(x + (i % 2) * 41, y + i / 2, ach_has(i) ? rgb(255, 215, 0)
+			: theme()->dim, tmp, (term_cols() - x - (i % 2) * 41 - 1) < 39
+			? term_cols() - x - (i % 2) * 41 - 1 : 39);
 	}
 	center(term_rows() - 1, theme()->dim, L("[ une touche pour revenir ]", "[ any key to go back ]"));
 	flush();
@@ -974,6 +1388,7 @@ void	screen_profile(void)
 void	screen_credits(void)
 {
 	const char	*l[24];
+	char		ver[64];
 	int			n;
 	int			i;
 	int			y;
@@ -982,7 +1397,8 @@ void	screen_credits(void)
 
 	n = 0;
 	l[n++] = "LE TESTEUR DES FOUS";
-	l[n++] = L("Version Libft", "Libft edition");
+	snprintf(ver, sizeof(ver), "%s · v%s", L("Version Libft", "Libft edition"), TDF_VERSION);
+	l[n++] = ver;
 	l[n++] = "";
 	l[n++] = L("Créé et vibe-codé par Splatch", "Created and vibe-coded by Splatch");
 	l[n++] = L("login 42 : romasant", "42 login: romasant");

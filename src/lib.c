@@ -3,52 +3,6 @@
 #include <unistd.h>
 #include "fous.h"
 
-#define W __attribute__((weak))
-
-int				ft_isalpha(int c) W;
-int				ft_isdigit(int c) W;
-int				ft_isalnum(int c) W;
-int				ft_isascii(int c) W;
-int				ft_isprint(int c) W;
-size_t			ft_strlen(const char *s) W;
-void			*ft_memset(void *s, int c, size_t n) W;
-void			ft_bzero(void *s, size_t n) W;
-void			*ft_memcpy(void *d, const void *s, size_t n) W;
-void			*ft_memmove(void *d, const void *s, size_t n) W;
-size_t			ft_strlcpy(char *d, const char *s, size_t n) W;
-size_t			ft_strlcat(char *d, const char *s, size_t n) W;
-int				ft_toupper(int c) W;
-int				ft_tolower(int c) W;
-char			*ft_strchr(const char *s, int c) W;
-char			*ft_strrchr(const char *s, int c) W;
-int				ft_strncmp(const char *a, const char *b, size_t n) W;
-void			*ft_memchr(const void *s, int c, size_t n) W;
-int				ft_memcmp(const void *a, const void *b, size_t n) W;
-char			*ft_strnstr(const char *b, const char *l, size_t n) W;
-int				ft_atoi(const char *s) W;
-void			*ft_calloc(size_t n, size_t s) W;
-char			*ft_strdup(const char *s) W;
-char			*ft_substr(char const *s, unsigned int st, size_t n) W;
-char			*ft_strjoin(char const *a, char const *b) W;
-char			*ft_strtrim(char const *s, char const *set) W;
-char			**ft_split(char const *s, char c) W;
-char			*ft_itoa(int n) W;
-char			*ft_strmapi(char const *s, char (*f)(unsigned int, char)) W;
-void			ft_striteri(char *s, void (*f)(unsigned int, char *)) W;
-void			ft_putchar_fd(char c, int fd) W;
-void			ft_putstr_fd(char *s, int fd) W;
-void			ft_putendl_fd(char *s, int fd) W;
-void			ft_putnbr_fd(int n, int fd) W;
-t_list			*ft_lstnew(void *content) W;
-void			ft_lstadd_front(t_list **lst, t_list *n) W;
-unsigned int	ft_lstsize(t_list *lst) W;
-t_list			*ft_lstlast(t_list *lst) W;
-void			ft_lstadd_back(t_list **lst, t_list *n) W;
-void			ft_lstdelone(t_list *lst, void (*del)(void *)) W;
-void			ft_lstclear(t_list **lst, void (*del)(void *)) W;
-void			ft_lstiter(t_list *lst, void (*f)(void *)) W;
-t_list			*ft_lstmap(t_list *l, void *(*f)(void *), void (*d)(void *)) W;
-
 t_ft		g_ft;
 t_shm		*g_shm;
 int			g_quar[NFN];
@@ -408,9 +362,236 @@ static t_list	*fb_lstmap(t_list *l, void *(*f)(void *), void (*d)(void *))
 	return (r);
 }
 
+
+/*
+** Définitions faibles : si ta libft définit ft_x, c'est la tienne qui
+** est liée. Si elle manque ou ne compile pas, la version de secours la
+** remplace, y compris quand une autre de tes fonctions l'appelle :
+** le jeu se lance toujours.
+*/
+#define WEAK __attribute__((weak))
+
+WEAK int	ft_isalpha(int c)
+{
+	return (fb_isalpha(c));
+}
+
+WEAK int	ft_isdigit(int c)
+{
+	return (fb_isdigit(c));
+}
+
+WEAK int	ft_isalnum(int c)
+{
+	return (fb_isalnum(c));
+}
+
+WEAK int	ft_isascii(int c)
+{
+	return (fb_isascii(c));
+}
+
+WEAK int	ft_isprint(int c)
+{
+	return (fb_isprint(c));
+}
+
+WEAK size_t	ft_strlen(const char *s)
+{
+	return (fb_strlen(s));
+}
+
+WEAK void	*ft_memset(void *s, int c, size_t n)
+{
+	return (fb_memset(s, c, n));
+}
+
+WEAK void	ft_bzero(void *s, size_t n)
+{
+	fb_bzero(s, n);
+}
+
+WEAK void	*ft_memcpy(void *d, const void *s, size_t n)
+{
+	return (fb_memcpy(d, s, n));
+}
+
+WEAK void	*ft_memmove(void *d, const void *s, size_t n)
+{
+	return (fb_memmove(d, s, n));
+}
+
+WEAK size_t	ft_strlcpy(char *d, const char *s, size_t n)
+{
+	return (fb_strlcpy(d, s, n));
+}
+
+WEAK size_t	ft_strlcat(char *d, const char *s, size_t n)
+{
+	return (fb_strlcat(d, s, n));
+}
+
+WEAK int	ft_toupper(int c)
+{
+	return (fb_toupper(c));
+}
+
+WEAK int	ft_tolower(int c)
+{
+	return (fb_tolower(c));
+}
+
+WEAK char	*ft_strchr(const char *s, int c)
+{
+	return (fb_strchr(s, c));
+}
+
+WEAK char	*ft_strrchr(const char *s, int c)
+{
+	return (fb_strrchr(s, c));
+}
+
+WEAK int	ft_strncmp(const char *a, const char *b, size_t n)
+{
+	return (fb_strncmp(a, b, n));
+}
+
+WEAK void	*ft_memchr(const void *s, int c, size_t n)
+{
+	return (fb_memchr(s, c, n));
+}
+
+WEAK int	ft_memcmp(const void *a, const void *b, size_t n)
+{
+	return (fb_memcmp(a, b, n));
+}
+
+WEAK char	*ft_strnstr(const char *b, const char *l, size_t n)
+{
+	return (fb_strnstr(b, l, n));
+}
+
+WEAK int	ft_atoi(const char *s)
+{
+	return (fb_atoi(s));
+}
+
+WEAK void	*ft_calloc(size_t n, size_t s)
+{
+	return (fb_calloc(n, s));
+}
+
+WEAK char	*ft_strdup(const char *s)
+{
+	return (fb_strdup(s));
+}
+
+WEAK char	*ft_substr(char const *s, unsigned int st, size_t n)
+{
+	return (fb_substr(s, st, n));
+}
+
+WEAK char	*ft_strjoin(char const *a, char const *b)
+{
+	return (fb_strjoin(a, b));
+}
+
+WEAK char	*ft_strtrim(char const *s, char const *set)
+{
+	return (fb_strtrim(s, set));
+}
+
+WEAK char	**ft_split(char const *s, char c)
+{
+	return (fb_split(s, c));
+}
+
+WEAK char	*ft_itoa(int n)
+{
+	return (fb_itoa(n));
+}
+
+WEAK char	*ft_strmapi(char const *s, char (*f)(unsigned int, char))
+{
+	return (fb_strmapi(s, f));
+}
+
+WEAK void	ft_striteri(char *s, void (*f)(unsigned int, char *))
+{
+	fb_striteri(s, f);
+}
+
+WEAK void	ft_putchar_fd(char c, int fd)
+{
+	fb_putchar_fd(c, fd);
+}
+
+WEAK void	ft_putstr_fd(char *s, int fd)
+{
+	fb_putstr_fd(s, fd);
+}
+
+WEAK void	ft_putendl_fd(char *s, int fd)
+{
+	fb_putendl_fd(s, fd);
+}
+
+WEAK void	ft_putnbr_fd(int n, int fd)
+{
+	fb_putnbr_fd(n, fd);
+}
+
+WEAK t_list	*ft_lstnew(void *content)
+{
+	return (fb_lstnew(content));
+}
+
+WEAK void	ft_lstadd_front(t_list **lst, t_list *n)
+{
+	fb_lstadd_front(lst, n);
+}
+
+WEAK unsigned int	ft_lstsize(t_list *lst)
+{
+	return (fb_lstsize(lst));
+}
+
+WEAK t_list	*ft_lstlast(t_list *lst)
+{
+	return (fb_lstlast(lst));
+}
+
+WEAK void	ft_lstadd_back(t_list **lst, t_list *n)
+{
+	fb_lstadd_back(lst, n);
+}
+
+WEAK void	ft_lstdelone(t_list *lst, void (*del)(void *))
+{
+	fb_lstdelone(lst, del);
+}
+
+WEAK void	ft_lstclear(t_list **lst, void (*del)(void *))
+{
+	fb_lstclear(lst, del);
+}
+
+WEAK void	ft_lstiter(t_list *lst, void (*f)(void *))
+{
+	fb_lstiter(lst, f);
+}
+
+WEAK t_list	*ft_lstmap(t_list *l, void *(*f)(void *), void (*d)(void *))
+{
+	return (fb_lstmap(l, f, d));
+}
+
+/* absente = fichier manquant (skip sans détail) ou qui ne compile pas ;
+** une fonction juste « non sélectionnée » reste la tienne */
 #define PICK(f) do { \
-	g_absent[E_##f] = (ft_##f == NULL); \
-	g_ft.f = (ft_##f && !g_quar[E_##f]) ? ft_##f : fb_##f; \
+	g_absent[E_##f] = (g_run.fn[E_##f].st == ST_BUILD \
+		|| (g_run.fn[E_##f].st == ST_SKIP && g_run.fn[E_##f].nd == 0)); \
+	g_ft.f = (g_absent[E_##f] || g_quar[E_##f]) ? fb_##f : ft_##f; \
 } while (0)
 
 void	lib_init(void)

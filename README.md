@@ -1,5 +1,7 @@
 # Le testeur des fous · Version Libft
 
+> **Version 2.0.0** · [historique des mises à jour](CHANGELOG.md) · `bash testeur_des_fous/run.sh --version`
+
 > Créé et vibe-codé par **Splatch** (login 42 : `romasant`), pour rendre Libft plus marrant.
 > Lore et idées : Splatch.
 
@@ -23,7 +25,9 @@ Puis lance :
 bash testeur_des_fous/run.sh
 ```
 
-Il te faut `cc`, `make`, un terminal d'au moins 80 x 24 et `norminette`. `valgrind` est utilisé s'il est installé.
+Il te faut `cc` (gcc ou clang), `make`, `bash`, un terminal d'au moins 80 x 24 et `norminette` (le testeur vérifie que c'est la dernière version, 3.3.60 au 5 novembre 2026 ; sinon : `python3 -m pip install --user -U norminette`). `valgrind` est utilisé s'il est installé.
+
+Ça tourne sur Linux, WSL et les postes 42. Sur macOS, `run.sh` reste compatible avec le bash 3.2 d'Apple et n'a besoin ni de `timeout` ni de `--wrap` ; cette partie n'a pas pu être essayée sur un vrai Mac.
 
 **Ne rends jamais ce dossier.** Le sujet interdit les fichiers inutiles, et la Norme porte sur tous tes fichiers. Ajoute-le à ton `.gitignore` :
 
@@ -42,12 +46,26 @@ echo "testeur_des_fous/" >> .gitignore
 | Avatar | ta garde-robe : tu équipes ce que tu possèdes et tu choisis les couleurs |
 | Profil et succès | ton niveau, ta progression, tes 18 succès |
 | Résultats détaillés | chaque fonction et son audit, avec les détails des erreurs |
+
+Dans l'écran des résultats : `f` ouvre la **fiche d'échec** de la fonction choisie (ce qui a été vu,
+l'attendu, le cas exact, une piste et la commande pour le rejouer seul ; `◀ ▶` passe à l'autre
+fonction en échec), `m` ouvre l'audit. Pendant l'analyse, une barre de progression montre le
+pourcentage, la fonction en cours, le nombre de contrôles et le temps restant.
 | Paramètres | tout ce qui se règle (voir plus bas) |
 
 ## Ce qui est testé
 
-- **Les 43 prototypes**, à la compilation, contre le sujet **v1.3** (`unsigned int ft_lstsize`). La structure `t_list` est vérifiée aussi.
-- **Les 43 fonctions**, chacune dans son propre binaire, avec AddressSanitizer, UndefinedBehaviorSanitizer et LeakSanitizer. Les `malloc` échouent un par un pour vérifier que tu libères tout et renvoies `NULL`. Un test qui ne répond plus est arrêté.
+- **Les 43 prototypes**, à la compilation, contre le sujet (`ft_lstsize` accepté en `int` comme en `unsigned int`). La structure `t_list` est vérifiée aussi.
+- **Les 43 fonctions**, chacune dans son propre binaire, liée comme la moulinette (via une archive), avec AddressSanitizer et UndefinedBehaviorSanitizer.
+- **Un traqueur mémoire** : chacun de tes `malloc` et `free` passe par le testeur (`-include tdf_hook.h`, seulement pendant les tests). Il connaît la taille de chaque bloc et le cas de test en cours, donc il voit :
+  - les fuites, avec le cas exact où le bloc a été alloué ;
+  - les double free, les `free` d'un argument, les chaînes littérales renvoyées ;
+  - les maillons que `ft_lstdelone` ou `ft_lstclear` oublient de libérer ;
+  - la **taille exacte** demandée à `malloc` : trop petit ou trop grand = FAUX, comme `mcheck` de tripouille (`malloc(len(s) - start + 1)` au lieu de `malloc(len + 1)` dans `ft_substr`, par exemple).
+- **Les échecs de `malloc`**, un par un : tu dois tout libérer et renvoyer `NULL`.
+- **Le cas fautif** est donné pour chaque crash, UB ou boucle infinie (« pendant : split("", ' ') »).
+- **Les octets >= 0x80** partout où une boucle s'arrête sur `'\0'` (le classique `> '\0'` au lieu de `!= '\0'`).
+- **La norminette**, à chaque lancement, sur tes `ft_*.c` et `libft.h`.
 - **L'audit moulinette** :
   - règles du Makefile, relink, dépendance à `libft.h`, flags, `-std=c99`, wildcards, `ar` ;
   - fonctions de la libc appelées, variables globales ;
@@ -116,7 +134,7 @@ bash testeur_des_fous/run.sh --exo 07
 
 Tout se règle depuis le menu :
 - **affichage** : animations (normales, rapides, aucune), couleurs (24 bits ou 256), langue (français ou anglais), touches (ZQSD, WASD ou HJKL), son, thème ;
-- **tests** : temps maximum par test, AddressSanitizer, UBSan, valgrind, norminette dans l'audit, audit moulinette (auto, toujours, jamais) ;
+- **tests** : temps maximum par test, AddressSanitizer, UBSan, valgrind, norminette, audit moulinette (auto, toujours, jamais) ;
 - **compte** : pseudo, remise à zéro de la sauvegarde.
 
 L'anglais couvre l'interface et les sujets. Le lore reste en français.
@@ -133,6 +151,22 @@ L'anglais couvre l'interface et les sujets. Le lore reste en français.
 | `bash testeur_des_fous/run.sh --valgrind` | repasser les fonctions OK sous valgrind |
 | `bash testeur_des_fous/run.sh --ci -v` | rapports complets des sanitizers |
 | `bash testeur_des_fous/run.sh -k` | garder le dossier de build |
+| `bash testeur_des_fous/run.sh --version` | afficher le numéro de version |
+
+
+## Les statuts
+
+| Statut | Sens |
+|---|---|
+| OK | tout passe |
+| NOTE | tout passe, avec une remarque (par exemple `calloc(0, x)` renvoie NULL, autorisé par POSIX) |
+| FAUX | un résultat ou un comportement mémoire est faux |
+| CRASH | erreur mémoire (ASan) ou signal, avec le cas qui tournait |
+| FUITE | des blocs alloués par ta fonction ne sont jamais libérés |
+| UB | comportement indéfini (UBSan) |
+| BOUCLE | aucune réponse dans le temps imparti |
+| COMPIL | ne compile pas, ou appelle une fonction qui ne compile pas |
+| ABSENT | fichier pas encore écrit |
 
 ## Crédits
 
@@ -141,3 +175,4 @@ L'anglais couvre l'interface et les sujets. Le lore reste en français.
 - Exercices d'entraînement conçus pour le testeur des fous.
 - Pixel art dessiné avec Python et Pillow (`outils/art.py` régénère `src/art.c`).
 - Sujet de référence : Libft v1.3.
+- Cas de test inspirés de [libftTester de Tripouille](https://github.com/Tripouille/libftTester) (vérification de la taille des `malloc`, cas de `ft_split`, `ft_strtrim`, `ft_substr`, `ft_calloc`) ; le code du testeur des fous est écrit à part.

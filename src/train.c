@@ -25,7 +25,7 @@ static int	exo_unlocked(int i)
 	return (i % 7 == 0 || g_save.exo[i - 1] == '1');
 }
 
-static int	exo_count(void)
+int	exo_done_count(void)
 {
 	int	i;
 	int	n;
@@ -34,6 +34,11 @@ static int	exo_count(void)
 	for (i = 0; i < NEXO; i++)
 		n += g_save.exo[i] == '1';
 	return (n);
+}
+
+static int	exo_count(void)
+{
+	return (exo_done_count());
 }
 
 static void	exo_dir(int i, char *buf, size_t sz)
@@ -67,7 +72,7 @@ static void	exo_prepare(int i)
 	fclose(f);
 }
 
-static void	lines_at(int x, int y, int maxy, t_rgb c, const char *s, int limit)
+static int	lines_at(int x, int y, int maxy, t_rgb c, const char *s, int limit)
 {
 	char	buf[400];
 	int		n;
@@ -86,11 +91,12 @@ static void	lines_at(int x, int y, int maxy, t_rgb c, const char *s, int limit)
 		text_at(x, y++, c, buf);
 		k += n;
 		if (limit >= 0 && k >= limit)
-			return ;
+			return (y);
 		s += strcspn(s, "\n");
 		if (*s == '\n')
 			s++;
 	}
+	return (y);
 }
 
 static void	parse_xres(const char *path, t_xres *r)
@@ -213,6 +219,8 @@ static void	level_screen(int i)
 	long	t0;
 	int		has;
 	int		j;
+	int		y;
+	int		w;
 	t_rgb	c;
 
 	exo_prepare(i);
@@ -227,21 +235,22 @@ static void	level_screen(int i)
 			x = 0;
 		bgc(theme()->bg);
 		out("\033[2J");
+		w = term_cols() - x - 1 < 78 ? term_cols() - x - 1 : 78;
 		snprintf(tmp, sizeof(tmp), L("NIVEAU %02d · %s", "LEVEL %02d · %s"), i + 1, g_exos[i].fn);
 		text_at(x, 1, theme()->accent2, tmp);
 		snprintf(tmp, sizeof(tmp), L("notion : %s", "topic: %s"), g_exos[i].notion);
-		text_at(x + 40, 1, theme()->dim, tmp);
+		text_clip(x, 2, theme()->dim, tmp, w);
 		snprintf(tmp, sizeof(tmp), "%s :", g_exos[i].npc);
 		text_at(x, 3, theme()->accent, tmp);
-		lines_at(x + 2, 4, 8, theme()->text, g_exos[i].lore,
+		y = lines_at(x + 2, 4, 8, theme()->text, g_exos[i].lore,
 			anim_off() ? -1 : (int)((now_ms() - t0) / 18));
-		lines_at(x, 8, 11, rgb(255, 230, 140), g_exos[i].proto, -1);
-		lines_at(x, 11, 15, theme()->text, L(g_exos[i].fr, g_exos[i].en), -1);
+		y = text_wrap(x, y + 1, y + 4, w, rgb(255, 230, 140), g_exos[i].proto);
+		y = text_wrap(x, y + 1, term_rows() - 6, w, theme()->text, L(g_exos[i].fr, g_exos[i].en));
 		snprintf(tmp, sizeof(tmp), L("Ton fichier : testeur_des_fous/entrainement/niveau_%02d/%s.c",
 				"Your file: testeur_des_fous/entrainement/niveau_%02d/%s.c"), i + 1, g_exos[i].fn);
-		text_at(x, 16, theme()->accent, tmp);
-		text_at(x, 17, theme()->dim, L("Autorisé : malloc, free, write, ta libft. Norme OBLIGATOIRE. Sujet complet : sujet.txt",
-				"Allowed: malloc, free, write, your libft. Norm REQUIRED. Full subject: sujet.txt"));
+		text_clip(x, y++, theme()->accent, tmp, w);
+		text_clip(x, y++, theme()->dim, L("Autorisé : malloc, free, write, ta libft. Norme OBLIGATOIRE.",
+				"Allowed: malloc, free, write, your libft. Norm REQUIRED."), w);
 		if (has)
 		{
 			c = !strcmp(r.st, "ok") ? rgb(80, 230, 140) : rgb(255, 90, 100);
@@ -250,11 +259,11 @@ static void	level_screen(int i)
 					r.checks, g_exos[i].win);
 			else
 				snprintf(tmp, sizeof(tmp), L("PAS ENCORE · %s", "NOT YET · %s"), r.st);
-			text_at(x, 19, c, tmp);
-			for (j = 0; j < r.nd && 20 + j < term_rows() - 1; j++)
+			y = text_wrap(x, y + 1, term_rows() - 1, w, c, tmp);
+			for (j = 0; j < r.nd && y < term_rows() - 1; j++)
 			{
-				snprintf(tmp, sizeof(tmp), "  %.74s", r.det[j]);
-				text_at(x, 20 + j, theme()->text, tmp);
+				snprintf(tmp, sizeof(tmp), "  %s", r.det[j]);
+				text_clip(x, y++, theme()->text, tmp, w);
 			}
 		}
 		text_at(x, term_rows() - 1, theme()->dim,
@@ -332,7 +341,7 @@ void	screen_train(void)
 		}
 		y = 20;
 		snprintf(tmp, sizeof(tmp), "%02d · %s · %s", sel + 1, g_exos[sel].fn, g_exos[sel].notion);
-		text_at(x, y, theme()->text, tmp);
+		text_clip(x, y, theme()->text, tmp, term_cols() - x - 1);
 		if (!g_save.boss[sel / 7])
 			snprintf(tmp, sizeof(tmp), L("Verrouillé : bats d'abord %s (toutes les fonctions de la partie %d propres).",
 					"Locked: beat %s first (every function of part %d clean)."),
@@ -342,7 +351,8 @@ void	screen_train(void)
 					"Locked: clear level %02d first."), sel);
 		else
 			snprintf(tmp, sizeof(tmp), "%s", L("Entrée : ouvrir le niveau", "Enter: open the level"));
-		text_at(x, y + 1, exo_unlocked(sel) ? theme()->accent : rgb(255, 160, 90), tmp);
+		text_wrap(x, y + 1, term_rows() - 1, term_cols() - x - 1,
+			exo_unlocked(sel) ? theme()->accent : rgb(255, 160, 90), tmp);
 		text_at(x, term_rows() - 1, theme()->dim,
 			L("flèches : choisir   Entrée : ouvrir   Échap : retour", "arrows: pick   Enter: open   Esc: back"));
 		flush();

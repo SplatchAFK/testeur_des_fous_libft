@@ -70,6 +70,7 @@ int	screen_menu(void)
 			fg(hue(i / 30.0 + t / 3000.0));
 			outf("%c", "LE TESTEUR DES FOUS"[i]);
 		}
+		text_at(x + 34 + 20, y + 1, theme()->dim, "v" TDF_VERSION);
 		text_at(x + 34, y + 2, theme()->dim, L("version libft · créé et vibe-codé par Splatch",
 				"libft edition · created and vibe-coded by Splatch"));
 		for (i = 0; i < n; i++)
@@ -89,11 +90,11 @@ int	screen_menu(void)
 			}
 		}
 		for (k = 0, i = 0; i < NFN; i++)
-			k += g_run.fn[i].st == ST_OK;
-		snprintf(tmp, sizeof(tmp), L("dernier test : %d/43 · boss %d/3 · entraînement %d/21",
-				"last test: %d/43 · bosses %d/3 · training %d/21"), k,
+			k += st_pass(g_run.fn[i].st);
+		snprintf(tmp, sizeof(tmp), L("test : %d/43 · boss %d/3 · entr. %d/21",
+				"test: %d/43 · boss %d/3 · train %d/21"), k,
 			g_save.boss[0] + g_save.boss[1] + g_save.boss[2],
-			(int)(strchr(g_save.exo, '0') ? (strchr(g_save.exo, '0') - g_save.exo) : NEXO));
+			exo_done_count());
 		text_at(x + 34, y + 5 + n * (term_rows() >= 30 ? 2 : 1), theme()->dim, tmp);
 		flush();
 		k = key_dir(key_read(40));
@@ -339,8 +340,8 @@ void	screen_shop(int wardrobe)
 						g_themes[id].floor, g_themes[id].text, g_themes[id].bg})[i]);
 		}
 		text_at(x, term_rows() - 2, theme()->dim,
-			L("◀ ▶ rayon   ▲ ▼ article   Entrée : acheter / équiper   c : couleur   Échap : retour",
-				"◀ ▶ section   ▲ ▼ item   Enter: buy / equip   c: color   Esc: back"));
+			L("◀ ▶ rayon  ▲ ▼ article  Entrée : acheter/équiper  c : couleur  Échap",
+				"◀ ▶ section  ▲ ▼ item  Enter: buy/equip  c: color  Esc: back"));
 		if (s.tab == NSLOT + 1)
 			text_at(x, term_rows() - 1, theme()->dim,
 				L("+ / - : sauter de 20   r : titre au hasard", "+ / -: jump 20   r: random title"));
@@ -515,7 +516,7 @@ void	screen_settings(void)
 		lab[8] = "AddressSanitizer";
 		lab[9] = "UndefinedBehaviorSanitizer";
 		lab[10] = L("Repasser sous valgrind", "Rerun under valgrind");
-		lab[11] = L("Norminette dans l'audit", "Norminette in the audit");
+		lab[11] = L("Norminette", "Norminette");
 		lab[12] = L("Audit moulinette", "Moulinette audit");
 		lab[13] = L("Pseudo", "Nickname");
 		lab[14] = L("Remettre la sauvegarde à zéro", "Reset the save");
@@ -544,8 +545,10 @@ void	screen_settings(void)
 		}
 		text_at(x, 18, theme()->dim, L("Les réglages des tests (temps, sanitizers, valgrind, audit)",
 				"Test settings (time, sanitizers, valgrind, audit)"));
-		text_at(x, 19, theme()->dim, L("s'appliquent au prochain « Tester tout ». La Norme reste obligatoire à l'entraînement.",
-				"apply to the next \"Test everything\". The Norm stays required in training."));
+		text_at(x, 19, theme()->dim, L("s'appliquent au prochain « Tester tout ».",
+				"apply to the next \"Test everything\"."));
+		text_at(x, 20, theme()->dim, L("La Norme reste obligatoire à l'entraînement.",
+				"The Norm stays required in training."));
 		text_at(x, term_rows() - 1, theme()->dim, L("▲ ▼ choisir   ◀ ▶ changer   Échap : retour",
 				"▲ ▼ pick   ◀ ▶ change   Esc: back"));
 		flush();

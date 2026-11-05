@@ -33,16 +33,21 @@ static void	check(int ok, const char *fmt, ...)
 	printf("\n");
 }
 
-void		*__real_malloc(size_t n);
 static int	g_inj_on;
 static int	g_inj_cnt;
 static int	g_inj_at;
 
-void	*__wrap_malloc(size_t n)
+/* malloc et free de ton code passent ici (cc -include tdf_hook.h) */
+void	*tdf_malloc_s(size_t n)
 {
 	if (g_inj_on && ++g_inj_cnt == g_inj_at)
 		return (NULL);
-	return (__real_malloc(n));
+	return (malloc(n));
+}
+
+void	tdf_free_s(void *p)
+{
+	free(p);
 }
 
 static void	inject_on(int k)
@@ -64,7 +69,7 @@ static char	*xdup(const char *s)
 	char	*p;
 
 	n = strlen(s) + 1;
-	p = __real_malloc(n);
+	p = malloc(n);
 	memcpy(p, s, n);
 	return (p);
 }
@@ -91,7 +96,7 @@ static int	*mkint(int v)
 {
 	int	*p;
 
-	p = __real_malloc(sizeof(int));
+	p = malloc(sizeof(int));
 	*p = v;
 	g_live++;
 	return (p);
@@ -115,7 +120,7 @@ static t_list	*mklist(const int *v, int n)
 	cur = NULL;
 	for (i = 0; i < n; i++)
 	{
-		node = __real_malloc(sizeof(t_list));
+		node = malloc(sizeof(t_list));
 		node->content = mkint(v[i]);
 		node->next = NULL;
 		if (cur)
@@ -254,7 +259,7 @@ static void	run_test(void)
 		}
 	}
 	check(1, "ok");
-	small = __real_malloc(1);
+	small = malloc(1);
 	small[0] = 'q';
 	check(ft_memrchr(small, 'q', 0) == NULL, "ft_memrchr(s, c, 0) doit renvoyer NULL sans rien lire");
 	free(small);

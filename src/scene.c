@@ -557,7 +557,7 @@ int	scene_child(int boss, int replay)
 	fails = 0;
 	for (f = g_bosses[boss].first; f <= g_bosses[boss].last && k != 2; f++)
 	{
-		ok = g_run.fn[f].st == ST_OK;
+		ok = st_pass(g_run.fn[f].st);
 		snprintf(g_log, sizeof(g_log), " ft_%s : %s", g_fn_name[f],
 			ok ? "OK" : st_label(g_run.fn[f].st));
 		if (ok)

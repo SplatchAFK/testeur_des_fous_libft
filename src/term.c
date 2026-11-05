@@ -322,6 +322,78 @@ int	ulen(const char *s)
 	return (n);
 }
 
+/* écrit au plus maxw colonnes (UTF-8), avec « … » si c'est coupé */
+void	text_clip(int x, int y, t_rgb c, const char *s, int maxw)
+{
+	char	buf[1024];
+	int		cols;
+	size_t	i;
+	size_t	cut;
+
+	if (maxw <= 0)
+		return ;
+	if (ulen(s) <= maxw)
+	{
+		text_at(x, y, c, s);
+		return ;
+	}
+	cols = 0;
+	cut = 0;
+	for (i = 0; s[i] && i < sizeof(buf) - 4; i++)
+	{
+		if (((unsigned char)s[i] & 0xC0) != 0x80)
+		{
+			if (cols == maxw - 1)
+				break ;
+			cols++;
+		}
+		cut = i + 1;
+	}
+	memcpy(buf, s, cut);
+	memcpy(buf + cut, "…", 4);
+	text_at(x, y, c, buf);
+}
+
+/* coupe s en lignes de largeur w (aux espaces, puis aux \n) ;
+** dessine à partir de y sans dépasser maxy ; renvoie la ligne suivante */
+int	text_wrap(int x, int y, int maxy, int w, t_rgb c, const char *s)
+{
+	char		buf[1024];
+	const char	*p;
+	const char	*e;
+	const char	*sp;
+	int			cols;
+
+	if (w < 1)
+		return (y);
+	p = s;
+	while (*p && y < maxy)
+	{
+		cols = 0;
+		sp = NULL;
+		e = p;
+		while (*e && *e != '\n' && (cols < w || (((unsigned char)*e & 0xC0) == 0x80)))
+		{
+			if (*e == ' ')
+				sp = e;
+			if (((unsigned char)*e & 0xC0) != 0x80)
+				cols++;
+			e++;
+		}
+		if (*e && *e != '\n' && *e != ' ' && sp && sp > p)
+			e = sp;
+		snprintf(buf, sizeof(buf), "%.*s", (int)(e - p), p);
+		for (sp = buf; *sp; sp++)
+			if (*sp == '\t')
+				*(char *)sp = ' ';
+		text_at(x, y++, c, buf);
+		p = e;
+		if (*p == ' ' || *p == '\n')
+			p++;
+	}
+	return (y);
+}
+
 void	text_at(int x, int y, t_rgb c, const char *s)
 {
 	at(x, y);
@@ -334,7 +406,10 @@ void	center(int y, t_rgb c, const char *s)
 	int	x;
 
 	x = (term_cols() - ulen(s)) / 2;
-	text_at(x < 0 ? 0 : x, y, c, s);
+	if (x < 0)
+		text_clip(0, y, c, s, term_cols());
+	else
+		text_at(x, y, c, s);
 }
 
 void	box(int x, int y, int w, int h, t_rgb c)

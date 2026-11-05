@@ -11,9 +11,9 @@ static void	summary(void)
 
 	ok = 0;
 	for (i = 0; i < NFN; i++)
-		ok += g_run.fn[i].st == ST_OK;
-	printf("\n  \033[1;38;2;200;120;255mLe testeur des fous\033[0m · Version Libft · %d/%d"
-		" %s · %s %d · boss %d/3 · %ld Octets\n", ok, NFN, L("fonctions OK", "functions OK"),
+		ok += st_pass(g_run.fn[i].st);
+	printf("\n  \033[1;38;2;200;120;255mLe testeur des fous\033[0m · Version Libft v%s · %d/%d"
+		" %s · %s %d · boss %d/3 · %ld Octets\n", TDF_VERSION, ok, NFN, L("fonctions OK", "functions OK"),
 		L("niveau", "level"), level_of(g_save.xp), g_save.boss[0] + g_save.boss[1] + g_save.boss[2],
 		g_save.octets);
 	for (i = 0; i < NFN; i++)
@@ -23,6 +23,40 @@ static void	summary(void)
 				g_run.fn[i].nd ? g_run.fn[i].detail[0] : "");
 	printf("  %s\n\n", L("Créé et vibe-codé par Splatch (romasant)",
 			"Created and vibe-coded by Splatch (romasant)"));
+}
+
+/* première fois qu'une nouvelle version est lancée : un petit message */
+static void	version_notice(void)
+{
+	char	path[600];
+	char	old[32];
+	char	msg[120];
+	FILE	*f;
+
+	snprintf(path, sizeof(path), "%s/version.txt", g_savedir);
+	old[0] = '\0';
+	f = fopen(path, "r");
+	if (f)
+	{
+		if (!fgets(old, sizeof(old), f))
+			old[0] = '\0';
+		fclose(f);
+	}
+	old[strcspn(old, "\r\n")] = '\0';
+	if (!strcmp(old, TDF_VERSION))
+		return ;
+	if (old[0])
+	{
+		snprintf(msg, sizeof(msg), L("v%s  →  v%s   (voir CHANGELOG.md)",
+				"v%s  →  v%s   (see CHANGELOG.md)"), old, TDF_VERSION);
+		toast(L("MISE À JOUR DU TESTEUR", "TESTER UPDATED"), msg, rgb(120, 220, 255));
+	}
+	f = fopen(path, "w");
+	if (f)
+	{
+		fprintf(f, "%s\n", TDF_VERSION);
+		fclose(f);
+	}
 }
 
 static int	menu_loop(void)
@@ -103,6 +137,8 @@ int	main(int ac, char **av)
 	}
 	if (!relance)
 		screen_intro();
+	if (!relance)
+		version_notice();
 	if (g_save.valid == -1)
 		toast(L("SAUVEGARDE MODIFIÉE À LA MAIN", "SAVE EDITED BY HAND"),
 			L("remise à zéro (ancienne copie : save.txt.triche)", "reset (old copy: save.txt.triche)"),

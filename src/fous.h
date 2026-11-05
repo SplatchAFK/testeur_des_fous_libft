@@ -1,8 +1,125 @@
 #ifndef FOUS_H
 # define FOUS_H
 
+/*
+** Les fonctions et variables globales du jeu sont préfixées par tdf_ :
+** une fonction d aide de ta libft qui s appelle fill, reset ou box ne
+** peut plus entrer en collision avec celles du jeu.
+*/
+# define ach_give tdf_ach_give
+# define ach_has tdf_ach_has
+# define anim_ms tdf_anim_ms
+# define anim_off tdf_anim_off
+# define at tdf_at
+# define avatar_draw tdf_avatar_draw
+# define bar tdf_bar
+# define bell tdf_bell
+# define bgc tdf_bgc
+# define big_text tdf_big_text
+# define big_width tdf_big_width
+# define boss_battles tdf_boss_battles
+# define box tdf_box
+# define center tdf_center
+# define cfg_export tdf_cfg_export
+# define cls tdf_cls
+# define color_seq tdf_color_seq
+# define cv_clear tdf_cv_clear
+# define cv_free tdf_cv_free
+# define cv_init tdf_cv_init
+# define cv_print tdf_cv_print
+# define cv_px tdf_cv_px
+# define cv_row tdf_cv_row
+# define cv_spr tdf_cv_spr
+# define exo_done_count tdf_exo_done_count
+# define fg tdf_fg
+# define fill tdf_fill
+# define flush tdf_flush
+# define fn_index tdf_fn_index
+# define g_absent tdf_g_absent
+# define g_ach_en tdf_g_ach_en
+# define g_ach_fr tdf_g_ach_fr
+# define g_boss_spr tdf_g_boss_spr
+# define g_bosses tdf_g_bosses
+# define g_exos tdf_g_exos
+# define g_fn_name tdf_g_fn_name
+# define g_fn_zone tdf_g_fn_zone
+# define g_ft tdf_g_ft
+# define g_items tdf_g_items
+# define g_nitems tdf_g_nitems
+# define g_ntheme tdf_g_ntheme
+# define g_pal_keys tdf_g_pal_keys
+# define g_pal_vals tdf_g_pal_vals
+# define g_quar tdf_g_quar
+# define g_run tdf_g_run
+# define g_save tdf_g_save
+# define g_savedir tdf_g_savedir
+# define g_shm tdf_g_shm
+# define g_slot_en tdf_g_slot_en
+# define g_slot_fr tdf_g_slot_fr
+# define g_swatch tdf_g_swatch
+# define g_tester_dir tdf_g_tester_dir
+# define g_themes tdf_g_themes
+# define hue tdf_hue
+# define item_color tdf_item_color
+# define item_find tdf_item_find
+# define item_own tdf_item_own
+# define item_owned tdf_item_owned
+# define key_dir tdf_key_dir
+# define key_read tdf_key_read
+# define level_of tdf_level_of
+# define lib_init tdf_lib_init
+# define look_default tdf_look_default
+# define mix tdf_mix
+# define now_ms tdf_now_ms
+# define out tdf_out
+# define outf tdf_outf
+# define outn tdf_outn
+# define pal tdf_pal
+# define part_clean tdf_part_clean
+# define reset tdf_reset
+# define results_load tdf_results_load
+# define rgb tdf_rgb
+# define save_load tdf_save_load
+# define save_write tdf_save_write
+# define scene_child tdf_scene_child
+# define scene_play tdf_scene_play
+# define screen_boss_menu tdf_screen_boss_menu
+# define screen_crash_choice tdf_screen_crash_choice
+# define screen_credits tdf_screen_credits
+# define screen_intro tdf_screen_intro
+# define screen_login tdf_screen_login
+# define screen_menu tdf_screen_menu
+# define screen_profile tdf_screen_profile
+# define screen_results tdf_screen_results
+# define screen_rewards tdf_screen_rewards
+# define screen_scan tdf_screen_scan
+# define screen_settings tdf_screen_settings
+# define screen_shop tdf_screen_shop
+# define screen_train tdf_screen_train
+# define sleep_ms tdf_sleep_ms
+# define st_bad tdf_st_bad
+# define st_color tdf_st_color
+# define st_label tdf_st_label
+# define st_pass tdf_st_pass
+# define term_cols tdf_term_cols
+# define term_end tdf_term_end
+# define term_init tdf_term_init
+# define term_pause tdf_term_pause
+# define term_resume tdf_term_resume
+# define term_rows tdf_term_rows
+# define text_at tdf_text_at
+# define text_clip tdf_text_clip
+# define text_wrap tdf_text_wrap
+# define theme tdf_theme
+# define title_name tdf_title_name
+# define title_price tdf_title_price
+# define toast tdf_toast
+# define ulen tdf_ulen
+# define xp_for tdf_xp_for
+
 # include <stddef.h>
 # include <stdint.h>
+# include "version.h"
 
 typedef struct s_list
 {
@@ -82,7 +199,7 @@ typedef struct s_shm
 enum e_st
 {
 	ST_WAIT, ST_OK, ST_KO, ST_CRASH, ST_LEAK, ST_UB, ST_TIME, ST_BUILD,
-	ST_SKIP
+	ST_SKIP, ST_WARN
 };
 
 typedef struct s_res
@@ -91,7 +208,7 @@ typedef struct s_res
 	int		checks;
 	int		ms;
 	int		proto;
-	char	detail[6][160];
+	char	detail[8][200];
 	int		nd;
 }	t_res;
 
@@ -105,8 +222,9 @@ typedef struct s_audit
 typedef struct s_run
 {
 	t_res	fn[NFN];
-	t_audit	audit[24];
+	t_audit	audit[32];
 	int		naudit;
+	int		audit_done;
 	char	warn[6][200];
 	int		nwarn;
 	char	stage[120];
@@ -310,6 +428,8 @@ t_rgb			rgb(int r, int g, int b);
 t_rgb			mix(t_rgb a, t_rgb b, double t);
 t_rgb			hue(double h);
 void			text_at(int x, int y, t_rgb c, const char *s);
+void			text_clip(int x, int y, t_rgb c, const char *s, int maxw);
+int				text_wrap(int x, int y, int maxy, int w, t_rgb c, const char *s);
 void			center(int y, t_rgb c, const char *s);
 int				ulen(const char *s);
 void			box(int x, int y, int w, int h, t_rgb c);
@@ -350,11 +470,13 @@ void			screen_shop(int wardrobe);
 void			screen_login(void);
 void			screen_settings(void);
 void			screen_train(void);
+int				exo_done_count(void);
 void			screen_boss_menu(void);
 int				screen_crash_choice(t_scene_out *g);
 void			toast(const char *title, const char *msg, t_rgb c);
 void			results_load(const char *path, long *off);
 int				st_bad(int st);
+int				st_pass(int st);
 const char		*st_label(int st);
 t_rgb			st_color(int st);
 int				part_clean(int p);

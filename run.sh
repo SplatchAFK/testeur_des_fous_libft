@@ -1,9 +1,15 @@
 #!/bin/bash
+# Le testeur des fous · Version Libft
+# Compatible bash 3.2 (macOS) à 5.x (Linux, WSL), gcc ou clang.
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 SRC="$HERE/src"
+VERSION="$(sed -n 's/^# *define TDF_VERSION "\(.*\)"/\1/p' "$SRC/version.h" 2>/dev/null | head -1)"
+[ -n "$VERSION" ] || VERSION="?"
 CC="${CC:-cc}"
+OS="$(uname -s 2>/dev/null)"
+NORM_LATEST="3.3.60"
 VERBOSE=0
 KEEP=0
 FORCEAUDIT=0
@@ -33,7 +39,7 @@ TMO="${LIBFT_TIMEOUT:-$CFG_TIMEOUT}"
 
 usage() {
 	cat <<EOF
-Le testeur des fous - Version Libft
+Le testeur des fous - Version Libft v$VERSION
 Créé et vibe-codé par Splatch (romasant)
 
   bash testeur_des_fous/run.sh                tout tester, combattre les boss, menu
@@ -44,6 +50,7 @@ Créé et vibe-codé par Splatch (romasant)
   bash testeur_des_fous/run.sh --valgrind     repasser les fonctions OK sous valgrind
   bash testeur_des_fous/run.sh -v             rapports complets des sanitizers (avec --ci)
   bash testeur_des_fous/run.sh -k             garder le dossier de build
+  bash testeur_des_fous/run.sh --version      afficher le numéro de version
 EOF
 }
 
@@ -60,6 +67,8 @@ while [ $# -gt 0 ]; do
 		--exo) EXO="$1"; shift ;;
 		--out) EXO_OUT="$1"; shift ;;
 		-h|--help) usage; exit 0 ;;
+		-V|--version) echo "Le testeur des fous v$VERSION"; exit 0 ;;
+		-*) echo "option inconnue : $a (voir --help)"; exit 2 ;;
 		*) a="${a%.c}"; SELECT+=("${a#ft_}") ;;
 	esac
 done
@@ -73,51 +82,52 @@ putendl_fd putnbr_fd"
 PART3="lstnew lstadd_front lstsize lstlast lstadd_back lstdelone lstclear
 lstiter lstmap"
 ALL=" $(echo $PART1 $PART2 $PART3) "
-for s in "${SELECT[@]}"; do
+for s in ${SELECT[@]+"${SELECT[@]}"}; do
 	case "$ALL" in *" $s "*) ;; *) echo "fonction inconnue : ft_$s"; exit 2 ;; esac
 done
 
-declare -A PROTO=(
-	[isalpha]="int ft_isalpha(int c);" [isdigit]="int ft_isdigit(int c);"
-	[isalnum]="int ft_isalnum(int c);" [isascii]="int ft_isascii(int c);"
-	[isprint]="int ft_isprint(int c);" [strlen]="size_t ft_strlen(const char *s);"
-	[memset]="void *ft_memset(void *s, int c, size_t n);"
-	[bzero]="void ft_bzero(void *s, size_t n);"
-	[memcpy]="void *ft_memcpy(void *dest, const void *src, size_t n);"
-	[memmove]="void *ft_memmove(void *dest, const void *src, size_t n);"
-	[strlcpy]="size_t ft_strlcpy(char *dst, const char *src, size_t size);"
-	[strlcat]="size_t ft_strlcat(char *dst, const char *src, size_t size);"
-	[toupper]="int ft_toupper(int c);" [tolower]="int ft_tolower(int c);"
-	[strchr]="char *ft_strchr(const char *s, int c);"
-	[strrchr]="char *ft_strrchr(const char *s, int c);"
-	[strncmp]="int ft_strncmp(const char *s1, const char *s2, size_t n);"
-	[memchr]="void *ft_memchr(const void *s, int c, size_t n);"
-	[memcmp]="int ft_memcmp(const void *s1, const void *s2, size_t n);"
-	[strnstr]="char *ft_strnstr(const char *big, const char *little, size_t len);"
-	[atoi]="int ft_atoi(const char *nptr);"
-	[calloc]="void *ft_calloc(size_t nmemb, size_t size);"
-	[strdup]="char *ft_strdup(const char *s);"
-	[substr]="char *ft_substr(char const *s, unsigned int start, size_t len);"
-	[strjoin]="char *ft_strjoin(char const *s1, char const *s2);"
-	[strtrim]="char *ft_strtrim(char const *s1, char const *set);"
-	[split]="char **ft_split(char const *s, char c);"
-	[itoa]="char *ft_itoa(int n);"
-	[strmapi]="char *ft_strmapi(char const *s, char (*f)(unsigned int, char));"
-	[striteri]="void ft_striteri(char *s, void (*f)(unsigned int, char*));"
-	[putchar_fd]="void ft_putchar_fd(char c, int fd);"
-	[putstr_fd]="void ft_putstr_fd(char *s, int fd);"
-	[putendl_fd]="void ft_putendl_fd(char *s, int fd);"
-	[putnbr_fd]="void ft_putnbr_fd(int n, int fd);"
-	[lstnew]="t_list *ft_lstnew(void *content);"
-	[lstadd_front]="void ft_lstadd_front(t_list **lst, t_list *new);"
-	[lstsize]="unsigned int ft_lstsize(t_list *lst);"
-	[lstlast]="t_list *ft_lstlast(t_list *lst);"
-	[lstadd_back]="void ft_lstadd_back(t_list **lst, t_list *new);"
-	[lstdelone]="void ft_lstdelone(t_list *lst, void (*del)(void *));"
-	[lstclear]="void ft_lstclear(t_list **lst, void (*del)(void *));"
-	[lstiter]="void ft_lstiter(t_list *lst, void (*f)(void *));"
-	[lstmap]="t_list *ft_lstmap(t_list *lst, void *(*f)(void *), void (*del)(void *));"
-)
+# bash 3.2 n'a pas de tableaux associatifs : un case fait l'affaire
+proto_of() {
+	case "$1" in
+		isalpha|isdigit|isalnum|isascii|isprint|toupper|tolower) echo "int ft_$1(int c);" ;;
+		strlen) echo "size_t ft_strlen(const char *s);" ;;
+		memset) echo "void *ft_memset(void *s, int c, size_t n);" ;;
+		bzero) echo "void ft_bzero(void *s, size_t n);" ;;
+		memcpy) echo "void *ft_memcpy(void *dest, const void *src, size_t n);" ;;
+		memmove) echo "void *ft_memmove(void *dest, const void *src, size_t n);" ;;
+		strlcpy) echo "size_t ft_strlcpy(char *dst, const char *src, size_t size);" ;;
+		strlcat) echo "size_t ft_strlcat(char *dst, const char *src, size_t size);" ;;
+		strchr) echo "char *ft_strchr(const char *s, int c);" ;;
+		strrchr) echo "char *ft_strrchr(const char *s, int c);" ;;
+		strncmp) echo "int ft_strncmp(const char *s1, const char *s2, size_t n);" ;;
+		memchr) echo "void *ft_memchr(const void *s, int c, size_t n);" ;;
+		memcmp) echo "int ft_memcmp(const void *s1, const void *s2, size_t n);" ;;
+		strnstr) echo "char *ft_strnstr(const char *big, const char *little, size_t len);" ;;
+		atoi) echo "int ft_atoi(const char *nptr);" ;;
+		calloc) echo "void *ft_calloc(size_t nmemb, size_t size);" ;;
+		strdup) echo "char *ft_strdup(const char *s);" ;;
+		substr) echo "char *ft_substr(char const *s, unsigned int start, size_t len);" ;;
+		strjoin) echo "char *ft_strjoin(char const *s1, char const *s2);" ;;
+		strtrim) echo "char *ft_strtrim(char const *s1, char const *set);" ;;
+		split) echo "char **ft_split(char const *s, char c);" ;;
+		itoa) echo "char *ft_itoa(int n);" ;;
+		strmapi) echo "char *ft_strmapi(char const *s, char (*f)(unsigned int, char));" ;;
+		striteri) echo "void ft_striteri(char *s, void (*f)(unsigned int, char*));" ;;
+		putchar_fd) echo "void ft_putchar_fd(char c, int fd);" ;;
+		putstr_fd) echo "void ft_putstr_fd(char *s, int fd);" ;;
+		putendl_fd) echo "void ft_putendl_fd(char *s, int fd);" ;;
+		putnbr_fd) echo "void ft_putnbr_fd(int n, int fd);" ;;
+		lstnew) echo "t_list *ft_lstnew(void *content);" ;;
+		lstadd_front) echo "void ft_lstadd_front(t_list **lst, t_list *new);" ;;
+		lstsize) echo "int ft_lstsize(t_list *lst); (ou unsigned int)" ;;
+		lstlast) echo "t_list *ft_lstlast(t_list *lst);" ;;
+		lstadd_back) echo "void ft_lstadd_back(t_list **lst, t_list *new);" ;;
+		lstdelone) echo "void ft_lstdelone(t_list *lst, void (*del)(void *));" ;;
+		lstclear) echo "void ft_lstclear(t_list **lst, void (*del)(void *));" ;;
+		lstiter) echo "void ft_lstiter(t_list *lst, void (*f)(void *));" ;;
+		lstmap) echo "t_list *ft_lstmap(t_list *lst, void *(*f)(void *), void (*del)(void *));" ;;
+	esac
+}
 
 set_colors() {
 	if [ -z "$NO_COLOR" ] && [ -t 1 ]; then
@@ -141,45 +151,70 @@ header() {
 	[ "$CI" = 1 ] || return
 	local w=58
 	printf '\n  %s╭' "$ACC"; rule $w; printf '╮%s\n' "$R"
-	printf '  %s│%s  %sLE TESTEUR DES FOUS%s %s· Version Libft%s%*s%s│%s\n' "$ACC" "$R" "$B" "$R" "$TXT" "$R" $((w - 37)) '' "$ACC" "$R"
+	printf '  %s│%s  %sLE TESTEUR DES FOUS%s %s· Version Libft v%s%s%*s%s│%s\n' "$ACC" "$R" "$B" "$R" "$TXT" "$VERSION" "$R" $((w - 39 - ${#VERSION})) '' "$ACC" "$R"
 	printf '  %s│%s  %scréé et vibe-codé par Splatch (romasant)%s%*s%s│%s\n' "$ACC" "$R" "$D" "$R" $((w - 42)) '' "$ACC" "$R"
 	printf '  %s╰' "$ACC"; rule $w; printf '╯%s\n' "$R"
 }
 
 section() {
 	[ "$CI" = 1 ] || return
-	printf '\n  %s%s%s %s' "$ACC" "$B" "$1" "$D"; rule $((56 - ${#1})); printf '%s\n' "$R"
+	printf '\n  %s%s%s %s' "$ACC" "$B" "$1" "$D"; rule $((56 - $(printf '%s' "$1" | wc -m))); printf '%s\n' "$R"
 }
 
 pill() { printf '%s %-6s %s' "$1" "$2" "$R"; }
 
-BUILD="$(mktemp -d /tmp/testeur_des_fous.XXXXXX)"
+TMPROOT="${TMPDIR:-/tmp}"
+BUILD="$(mktemp -d "${TMPROOT%/}/testeur_des_fous.XXXXXX")"
 RES="$BUILD/results"
 : > "$RES"
 mkdir -p "$BUILD/obj" "$BUILD/bin" "$BUILD/log" "$BUILD/plain" "$BUILD/proto" "$BUILD/vg"
 
 cleanup() {
 	[ -n "$TPID" ] && kill "$TPID" 2>/dev/null && wait "$TPID" 2>/dev/null
+	[ -n "$NPID" ] && kill "$NPID" 2>/dev/null
 	[ "$KEEP" = 1 ] || rm -rf "$BUILD"
 }
 trap cleanup EXIT
 
 emit() { printf '%s\n' "$*" | tr -d '\r' >> "$RES"; }
 
+# bash 4.3+ : wait -n ; bash 3.2 (macOS) : petite attente
+HAVE_WAITN=0
+if [ "${BASH_VERSINFO[0]}" -gt 4 ] || { [ "${BASH_VERSINFO[0]}" = 4 ] && [ "${BASH_VERSINFO[1]}" -ge 3 ]; }; then
+	HAVE_WAITN=1
+fi
+JOBS="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
+case "$JOBS" in ''|*[!0-9]*) JOBS=4 ;; esac
+wait_slot() {
+	while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
+		if [ "$HAVE_WAITN" = 1 ]; then wait -n; else sleep 0.05; fi
+	done
+}
+
+# filet de sécurité : le binaire de test s'arrête seul (alarm), timeout en plus si présent
+TOCMD=""
+command -v timeout >/dev/null 2>&1 && TOCMD="timeout"
+[ -z "$TOCMD" ] && command -v gtimeout >/dev/null 2>&1 && TOCMD="gtimeout"
+with_timeout() {
+	local s="$1"
+	shift
+	if [ -n "$TOCMD" ]; then "$TOCMD" "$s" "$@"; else "$@"; fi
+}
+
 SANS=""
 [ "$CFG_ASAN" = 1 ] && SANS="address"
 [ "$CFG_UBSAN" = 1 ] && SANS="${SANS:+$SANS,}undefined"
-san_ok() { echo 'int main(void){return 0;}' | $CC -x c - -fsanitize="$1" -o "$BUILD/san_probe" 2>/dev/null; }
+san_ok() { echo 'int main(void){return 0;}' | $CC -x c - -fsanitize="$1" -o "$BUILD/san_probe" 2>/dev/null && "$BUILD/san_probe" 2>/dev/null; }
 if [ -n "$SANS" ] && ! san_ok "$SANS"; then
 	SANS_OLD="$SANS"
 	if [ "$SANS" != address ] && san_ok address; then SANS=address; else SANS=""; fi
-	emit "G	sanitizers indisponibles ($SANS_OLD) : repli sur ${SANS:-aucun}"
+	emit "G	sanitizers indisponibles ($SANS_OLD) : repli sur ${SANS:-aucun} (le traqueur mémoire du testeur reste actif)"
 fi
 SAN=""
 [ -n "$SANS" ] && SAN="-fsanitize=$SANS -fno-sanitize-recover=all -fno-omit-frame-pointer"
-JOBS="$(nproc 2>/dev/null || echo 4)"
-
-wait_slot() { while (($(jobs -rp | wc -l) >= JOBS)); do wait -n; done; }
+LDX=""
+[ "$OS" = Darwin ] && LDX="-Wl,-U,___sanitizer_set_death_callback"
+HOOK=(-include "$SRC/tdf_hook.h")
 
 wanted() {
 	[ ${#SELECT[@]} -eq 0 ] && return 0
@@ -190,7 +225,7 @@ wanted() {
 compile_obj() {
 	local f="$1" b
 	b="$(basename "$f" .c)"
-	$CC -Wall -Wextra -Werror -g $SAN -I "$ROOT" -c "$f" -o "$BUILD/obj/$b.o" \
+	$CC -Wall -Wextra -Werror -g $SAN "${HOOK[@]}" -I "$ROOT" -c "$f" -o "$BUILD/obj/$b.o" \
 		2> "$BUILD/obj/$b.err" || rm -f "$BUILD/obj/$b.o"
 }
 
@@ -201,35 +236,51 @@ compile_plain() {
 		2> /dev/null || rm -f "$BUILD/plain/$b.o"
 }
 
+compile_vg() {
+	local f="$1" b
+	b="$(basename "$f" .c)"
+	$CC -Wall -Wextra -Werror -g "${HOOK[@]}" -I "$ROOT" -c "$f" -o "$BUILD/vg/$b.o" \
+		2> /dev/null || rm -f "$BUILD/vg/$b.o"
+}
+
+# comme la moulinette : on lie une archive, seuls les .o utiles sont pris
+make_archive() {
+	local dir="$1" out="$2" objs=() o
+	for o in "$dir"/*.o; do [ -f "$o" ] && objs+=("$o"); done
+	rm -f "$out"
+	[ ${#objs[@]} -gt 0 ] && ar rcs "$out" "${objs[@]}" 2>/dev/null
+}
+
 build_bin() {
-	local n="$1" objs=()
-	for o in "$BUILD"/obj/*.o; do [ -f "$o" ] && objs+=("$o"); done
+	local n="$1"
 	$CC -g -Wno-unused-function -Wno-unused-variable -Wno-format-security \
 		-Werror=implicit-function-declaration $SAN -DT_"$n" -I "$ROOT" \
-		"$SRC/tests.c" "${objs[@]}" -Wl,--wrap=malloc -o "$BUILD/bin/$n" \
+		"$SRC/tests.c" "$BUILD/libtest.a" $LDX -o "$BUILD/bin/$n" \
 		2> "$BUILD/bin/$n.err" || rm -f "$BUILD/bin/$n"
 }
 
 build_game() {
-	local objs=() o
+	local objs=() o f
 	for f in "$ROOT"/ft_*.c; do [ -f "$f" ] && compile_plain "$f" & done
 	wait
 	for o in "$BUILD"/plain/*.o; do [ -f "$o" ] && objs+=("$o"); done
 	local GSRC=("$SRC"/main.c "$SRC"/screens.c "$SRC"/ui.c "$SRC"/train.c "$SRC"/scene.c
 		"$SRC"/save.c "$SRC"/data.c "$SRC"/avatar.c "$SRC"/art.c "$SRC"/term.c
 		"$SRC"/font.c "$SRC"/lib.c)
-	$CC -O2 -w -I "$SRC" "${GSRC[@]}" "${objs[@]}" -lm -o "$BUILD/fous" \
+	local GX=""
+	[ "$OS" = Darwin ] && GX="-Wl,-undefined,dynamic_lookup"
+	$CC -O2 -w -I "$SRC" "${GSRC[@]}" ${objs[@]+"${objs[@]}"} -lm $GX -o "$BUILD/fous" \
 		2> "$BUILD/game.err" && return 0
-	$CC -O2 -w -I "$SRC" "${GSRC[@]}" "${objs[@]}" -lm \
+	$CC -O2 -w -I "$SRC" "${GSRC[@]}" ${objs[@]+"${objs[@]}"} -lm $GX \
 		-Wl,--allow-multiple-definition -o "$BUILD/fous" 2>> "$BUILD/game.err"
 }
 
 check_proto() {
-	local n="$1" out decl
+	local n="$1" out decl want
 	if [ ! -f "$ROOT/libft.h" ]; then
 		echo "missing	libft.h introuvable" > "$BUILD/proto/$n"; return
 	fi
-	local want="${PROTO[$n]}"
+	want="$(proto_of "$n")"
 	out="$($CC -fsyntax-only -DF_"$n" -I "$ROOT" "$SRC/protos.c" 2>&1)"
 	if [ -z "$out" ]; then
 		echo "ok" > "$BUILD/proto/$n"
@@ -247,13 +298,15 @@ det() { DET+=("$(printf '%s' "$1" | tr '\t' ' ')"); }
 report() {
 	local st="$1" n="$2" c="$3" ms="$4" t l
 	local line="T	$n	$st	${c:-0}	$ms"
-	for l in "${DET[@]}"; do line+="	$l"; done
+	for l in ${DET[@]+"${DET[@]}"}; do line+="	$l"; done
 	emit "$line"
 	[ "$CI" = 1 ] || return
 	t="$(printf '%d.%02ds' $((ms / 1000)) $((ms % 1000 / 10)))"
-	printf '  '
+	n_seen=$((n_seen + 1))
+	printf '  %s%2d/%d%s ' "$D" "$n_seen" "$N_TOTAL" "$R"
 	case "$st" in
 		ok)    pill "$P_OK" OK ;;
+		warn)  pill "$P_WN" NOTE ;;
 		ko)    pill "$P_KO" FAUX ;;
 		crash) pill "$P_CR" CRASH ;;
 		leak)  pill "$P_LK" FUITE ;;
@@ -267,36 +320,38 @@ report() {
 	else
 		printf '  %s%-18s%s %s%6s contrôles%s   %s%s%s\n' "$TXT" "ft_$n" "$R" "$D" "${c:--}" "$R" "$D" "$t" "$R"
 	fi
-	for l in "${DET[@]}"; do printf '            %s%s%s\n' "$D" "$l" "$R"; done
+	for l in ${DET[@]+"${DET[@]}"}; do printf '            %s%s%s\n' "$D" "$l" "$R"; done
 }
 
 where() {
 	awk '
-	/ERROR: (Address|Leak)Sanitizer/ { sec = "at"; got = 0 }
-	/^(READ|WRITE) of size/ { sec = "at"; got = 0 }
-	/allocated by thread/ { sec = "allocated at"; got = 0 }
-	/freed by thread/ { sec = "freed at"; got = 0 }
-	/^(Direct|Indirect) leak/ { sec = "leaked, allocated at"; got = 0 }
-	/^ *#[0-9]+ 0x[0-9a-f]+ in ft_[a-z_0-9]+ / {
+	/ERROR: (Address|Leak)Sanitizer/ { sec = "à"; got = 0 }
+	/^(READ|WRITE) of size/ { sec = "à"; got = 0 }
+	/allocated by thread/ { sec = "alloué à"; got = 0 }
+	/freed by thread/ { sec = "libéré à"; got = 0 }
+	/^ *#[0-9]+ 0x[0-9a-f]+ in _?ft_[a-z_0-9]+ / {
 		if (!got) {
-			path = $5; sub(/.*\//, "", path)
-			print sec " " path " (" $4 ")"; got = 1
+			path = $5; sub(/.*\//, "", path); fn = $4; sub(/^_/, "", fn)
+			print sec " " path " (" fn ")"; got = 1
 		}
 	}' "$1" | awk '!seen[$0]++' | head -4
 }
 
 fullreport() { [ "$VERBOSE" = 1 ] && [ "$CI" = 1 ] && sed 's/^/             /' "$1" | head -45; }
 
-n_ok=0; n_bad=0; n_skip=0
+n_ok=0; n_bad=0; n_skip=0; n_warn=0; n_seen=0
+N_TOTAL=43
+[ ${#SELECT[@]} -gt 0 ] && N_TOTAL=${#SELECT[@]}
 
 valgrind_one() {
-	local n="$1" objs=() o out
+	local n="$1" out
 	command -v valgrind >/dev/null 2>&1 || return 0
-	for o in "$BUILD"/plain/*.o; do [ -f "$o" ] && objs+=("$o"); done
-	$CC -g -w -DT_"$n" -I "$ROOT" "$SRC/tests.c" "${objs[@]}" -Wl,--wrap=malloc \
+	[ -f "$BUILD/libvg.a" ] || return 0
+	$CC -g -w -DT_"$n" -I "$ROOT" "$SRC/tests.c" "$BUILD/libvg.a" \
 		-o "$BUILD/vg/$n" 2>/dev/null || return 0
-	timeout $((TMO * 4)) valgrind -q --leak-check=full --errors-for-leak-kinds=definite,indirect \
-		--error-exitcode=42 --log-file="$BUILD/vg/$n.log" "$BUILD/vg/$n" > /dev/null 2>&1
+	TDF_TIMEOUT=$((TMO * 4)) with_timeout $((TMO * 4 + 5)) valgrind -q --leak-check=full \
+		--errors-for-leak-kinds=definite,indirect --error-exitcode=42 \
+		--log-file="$BUILD/vg/$n.log" "$BUILD/vg/$n" > /dev/null 2>&1
 	[ $? = 42 ] || return 0
 	out="$(grep -m1 -E 'definitely|indirectly|Invalid|uninitialised' "$BUILD/vg/$n.log" | sed 's/^==[0-9]*== //')"
 	det "valgrind : ${out:-erreur mémoire}"
@@ -304,64 +359,79 @@ valgrind_one() {
 }
 
 run_one() {
-	local n="$1" bin="$BUILD/bin/$n" start end ms code marker checks fails
-	local san="$BUILD/san_$n" l
+	local n="$1" bin="$BUILD/bin/$n" code marker checks fails warns ms l
+	local san="$BUILD/san_$n" out="$BUILD/out_$n" casec caset leakl dep
 	DET=()
 
 	if [ ! -f "$ROOT/ft_$n.c" ]; then
-		report skip "$n" "" 0; ((n_skip++)); return
+		report skip "$n" "" 0; n_skip=$((n_skip + 1)); return
 	fi
 	if [ ! -f "$BUILD/obj/ft_$n.o" ]; then
 		while IFS= read -r l; do det "$l"; done < <(grep -E 'error|warning' "$BUILD/obj/ft_$n.err" | sed -E 's/^.*\/(ft_|libft\.h)/\1/' | head -4)
-		report build "$n" "" 0; ((n_bad++)); return
+		report build "$n" "" 0; n_bad=$((n_bad + 1)); return
 	fi
 	if [ ! -f "$bin" ]; then
-		while IFS= read -r l; do det "$l"; done < <(grep -E 'error|undefined|implicit|multiple definition|first defined|cannot find' "$BUILD/bin/$n.err" | sed -E 's/^.*\/(ft_|libft\.h)/\1/' | head -3)
+		dep="$(grep -oE "undefined (reference|symbol)[^\`']*[\`']_?ft_[a-z_0-9]+" "$BUILD/bin/$n.err" | grep -oE 'ft_[a-z_0-9]+' | sort -u | tr '\n' ' ')"
+		[ -n "$dep" ] && det "ta fonction appelle ${dep}qui manque ou ne compile pas"
+		while IFS= read -r l; do det "$l"; done < <(grep -E 'error|multiple definition|first defined|cannot find' "$BUILD/bin/$n.err" | grep -v 'ld returned' | sed -E 's/^.*\/(ft_|libft\.h)/\1/' | head -3)
 		grep -q 'implicit' "$BUILD/bin/$n.err" && det "piste : prototype absent de libft.h ?"
-		report build "$n" "" 0; ((n_bad++)); return
+		report build "$n" "" 0; n_bad=$((n_bad + 1)); return
 	fi
 
 	rm -f "$BUILD"/log/*
-	start=$(date +%s%N)
-	timeout "$TMO" "$bin" > "$BUILD/out_$n" 2> "$BUILD/err_$n"
+	TDF_TIMEOUT="$TMO" with_timeout $((TMO + 5)) "$bin" > "$out" 2> "$BUILD/err_$n"
 	code=$?
-	end=$(date +%s%N)
-	ms=$(((end - start) / 1000000))
 	cat "$BUILD"/log/san.* "$BUILD/err_$n" > "$san" 2>/dev/null
-	marker="$(grep '^@@ ' "$BUILD/out_$n" | tail -1)"
+	marker="$(grep '^@@ ' "$out" | tail -1)"
 	checks="$(echo "$marker" | awk '{print $2}')"
 	fails="$(echo "$marker" | awk '{print $3}')"
+	warns="$(echo "$marker" | awk '{print $4}')"
+	ms="$(echo "$marker" | awk '{print $5}')"
+	case "$ms" in ''|*[!0-9]*) ms=0 ;; esac
+	casec="$(grep -m1 '^@@C ' "$out" | cut -c5-)"
+	caset="$(grep -m1 '^@@T ' "$out" | cut -c5-)"
+	leakl="$(grep -m1 '^@@L ' "$out")"
 
-	if [ "$code" = 124 ]; then
+	if [ "$code" = 124 ] || [ -n "$caset" ]; then
 		det "aucune réponse après $TMO s : boucle infinie ?"
-		report time "$n" "" "$ms"; ((n_bad++))
+		[ -n "$caset" ] && det "pendant : $caset"
+		report time "$n" "" "$((TMO * 1000))"; n_bad=$((n_bad + 1))
 	elif grep -q 'runtime error' "$san"; then
 		while IFS= read -r l; do det "$l"; done < <(grep -m1 'runtime error' "$san" | sed -E 's/^.*\/(ft_)/\1/')
-		report ub "$n" "$checks" "$ms"; ((n_bad++)); fullreport "$san"
+		[ -n "$casec" ] && det "pendant : $casec"
+		report ub "$n" "$checks" "$ms"; n_bad=$((n_bad + 1)); fullreport "$san"
 	elif grep -q 'ERROR: AddressSanitizer' "$san"; then
 		det "$(grep -m1 'ERROR: AddressSanitizer' "$san" | sed -E 's/.*AddressSanitizer: ([^ ]+).*/\1/')"
+		[ -n "$casec" ] && det "pendant : $casec"
 		while IFS= read -r l; do det "$l"; done < <(where "$san")
 		while IFS= read -r l; do det "$l"; done < <(grep -m1 -E 'is located .* (after|before|inside)' "$san" | sed -E 's/^ *//')
-		report crash "$n" "$checks" "$ms"; ((n_bad++)); fullreport "$san"
+		report crash "$n" "$checks" "$ms"; n_bad=$((n_bad + 1)); fullreport "$san"
+	elif [ -n "$casec" ]; then
+		det "plantage (code $code) pendant : $casec"
+		report crash "$n" "$checks" "$ms"; n_bad=$((n_bad + 1))
 	elif [ -n "$fails" ] && [ "$fails" -gt 0 ]; then
-		while IFS= read -r l; do det "$l"; done < <(grep '^  ko| ' "$BUILD/out_$n" | sed 's/^  ko| //' | head -5)
+		while IFS= read -r l; do det "$l"; done < <(grep '^  ko| ' "$out" | sed 's/^  ko| //' | head -5)
 		[ "$fails" -gt 5 ] && det "... et $((fails - 5)) autres contrôles ratés sur $fails"
-		grep -q 'LeakSanitizer' "$san" && det "(fuite mémoire aussi : corrige d'abord la logique)"
-		report ko "$n" "$checks" "$ms"; ((n_bad++))
-	elif grep -q 'LeakSanitizer' "$san"; then
-		while IFS= read -r l; do det "$l"; done < <(grep -m1 'SUMMARY' "$san" | sed -E 's/SUMMARY: [A-Za-z]+: //')
-		while IFS= read -r l; do det "$l"; done < <(where "$san")
-		report leak "$n" "$checks" "$ms"; ((n_bad++)); fullreport "$san"
+		[ -n "$leakl" ] && det "(fuite mémoire aussi : corrige d'abord la logique)"
+		report ko "$n" "$checks" "$ms"; n_bad=$((n_bad + 1))
+	elif [ -n "$leakl" ]; then
+		det "$(echo "$leakl" | awk '{print $2 " bloc(s), " $3 " octets jamais libérés"}')"
+		while IFS= read -r l; do det "$l"; done < <(grep '^  lk| ' "$out" | sed 's/^  lk| //' | head -3)
+		report leak "$n" "$checks" "$ms"; n_bad=$((n_bad + 1))
 	elif [ "$code" = 0 ] && [ -n "$marker" ]; then
 		if [ "$VALG" = 1 ] && ! valgrind_one "$n"; then
-			report leak "$n" "$checks" "$ms"; ((n_bad++))
+			report leak "$n" "$checks" "$ms"; n_bad=$((n_bad + 1))
+		elif [ -n "$warns" ] && [ "$warns" -gt 0 ]; then
+			while IFS= read -r l; do det "$l"; done < <(grep '^  wn| ' "$out" | sed 's/^  wn| //' | head -3)
+			[ "$warns" -gt 3 ] && det "... $warns avertissements en tout"
+			report warn "$n" "$checks" "$ms"; n_ok=$((n_ok + 1)); n_warn=$((n_warn + 1))
 		else
-			report ok "$n" "$checks" "$ms"; ((n_ok++))
+			report ok "$n" "$checks" "$ms"; n_ok=$((n_ok + 1))
 		fi
 	else
 		det "sortie avec le code $code avant la fin du test"
 		while IFS= read -r l; do det "$l"; done < <(head -3 "$BUILD/err_$n")
-		report crash "$n" "$checks" "$ms"; ((n_bad++))
+		report crash "$n" "$checks" "$ms"; n_bad=$((n_bad + 1))
 	fi
 }
 
@@ -369,7 +439,7 @@ n_audit_ko=0
 audit_line() {
 	local st="$1" label="$2" detail="$3"
 	emit "A	$st	$label	$detail"
-	[ "$st" = ko ] && ((n_audit_ko++))
+	[ "$st" = ko ] && n_audit_ko=$((n_audit_ko + 1))
 	[ "$CI" = 1 ] || return
 	printf '  '
 	case "$st" in
@@ -381,6 +451,81 @@ audit_line() {
 	[ -n "$detail" ] && printf '            %s%s%s\n' "$D" "$detail" "$R"
 }
 
+# symboles (sur macOS, nm préfixe tout par « _ »)
+undef_syms() {
+	nm -u "$@" 2>/dev/null | awk 'NF >= 1 && $NF !~ /:$/ {print $NF}' \
+		| sed -e 's/^_\(.*\)/\1/' | sort -u
+}
+def_syms() {
+	nm "$@" 2>/dev/null | awk 'NF == 3 && $2 ~ /^[TDBRSCtdbrsc]$/ {print $3}' \
+		| sed -e 's/^_\(.*\)/\1/' | sort -u
+}
+[ "$OS" = Darwin ] || {
+	undef_syms() {
+		nm -u "$@" 2>/dev/null | awk 'NF >= 1 && $NF !~ /:$/ {print $NF}' | sort -u
+	}
+	def_syms() {
+		nm --defined-only "$@" 2>/dev/null | awk 'NF == 3 {print $3}' | sort -u
+	}
+}
+LIBC_OK='^(malloc|free|write|_GLOBAL_OFFSET_TABLE_|__stack_chk_fail|__stack_chk_guard|dyld_stub_binder)$'
+
+# ------------------------------------------------------------------ norminette
+NORM_CMD=""
+if command -v norminette >/dev/null 2>&1; then NORM_CMD="norminette"
+elif python3 -m norminette --version >/dev/null 2>&1; then NORM_CMD="python3 -m norminette"
+fi
+
+ver_lt() {
+	awk -v a="$1" -v b="$2" 'BEGIN {
+		na = split(a, x, "."); nb = split(b, y, ".")
+		for (i = 1; i <= 3; i++) { if (x[i] + 0 < y[i] + 0) exit 0; if (x[i] + 0 > y[i] + 0) exit 1 }
+		exit 1 }'
+}
+
+start_norm() {
+	[ "$CFG_NORM" = 1 ] && [ -n "$NORM_CMD" ] || return
+	( cd "$ROOT" && $NORM_CMD ft_*.c libft.h 2>&1 | sed $'s/\x1b\\[[0-9;]*m//g' > "$BUILD/norm.out"; echo done > "$BUILD/norm.done" ) &
+	NPID=$!
+}
+
+n_norm_ko=0
+finish_norm() {
+	local v nerr nfile files l
+	section "Norme · norminette"
+	if [ "$CFG_NORM" != 1 ]; then
+		audit_line warn "norminette désactivée dans les paramètres" "la moulinette, elle, la lance toujours"
+		return
+	fi
+	if [ -z "$NORM_CMD" ]; then
+		audit_line warn "norminette introuvable : la Norme n'est PAS vérifiée" "installe-la : python3 -m pip install --user norminette"
+		emit "G	norminette introuvable : la Norme n'est pas vérifiée (python3 -m pip install --user norminette)"
+		return
+	fi
+	[ -n "$NPID" ] && wait "$NPID" 2>/dev/null
+	NPID=""
+	v="$($NORM_CMD --version 2>/dev/null | grep -oE 'norminette [0-9]+\.[0-9]+\.[0-9]+' | head -1 | grep -oE '[0-9.]+$')"
+	if [ -n "$v" ] && ver_lt "$v" "$NORM_LATEST"; then
+		audit_line warn "norminette $v : version plus ancienne que $NORM_LATEST" "mets-la à jour : python3 -m pip install --user -U norminette"
+		emit "G	norminette $v installée, la dernière connue est $NORM_LATEST : mets-la à jour"
+	fi
+	[ -f "$BUILD/norm.out" ] || { audit_line warn "norminette n'a rien renvoyé"; return; }
+	nerr="$(grep -c '^Error' "$BUILD/norm.out")"
+	files="$(grep -E ': Error!$' "$BUILD/norm.out" | sed 's/: Error!$//' | tr '\n' ' ')"
+	nfile="$(grep -cE ': Error!$' "$BUILD/norm.out")"
+	if [ "$nerr" = 0 ] && [ "$nfile" = 0 ]; then
+		audit_line ok "norminette ${v:-?} : aucune erreur (ft_*.c et libft.h)"
+	else
+		n_norm_ko=1
+		audit_line ko "norminette ${v:-?} : $nerr erreur(s) dans $nfile fichier(s)" "$(echo "$files" | cut -c1-90)"
+		if [ "$CI" = 1 ]; then
+			grep -E ': Error!$|^Error' "$BUILD/norm.out" | head -12 | while IFS= read -r l; do
+				printf '            %s%s%s\n' "$D" "$(printf '%s' "$l" | tr '\t' ' ' | cut -c1-100)" "$R"
+			done
+		fi
+	fi
+}
+
 run_audit() {
 	local A="$BUILD/audit" out nsrc nobj bad extra
 	rm -rf "$A"; mkdir -p "$A"
@@ -389,7 +534,7 @@ run_audit() {
 	section "Audit · ce que la moulinette regarde"
 
 	if [ ! -f "$ROOT/Makefile" ]; then
-		audit_line ko "Makefile à la racine"; return
+		audit_line ko "Makefile à la racine"; emit "AD"; return
 	fi
 	audit_line ok "Makefile à la racine"
 
@@ -397,7 +542,7 @@ run_audit() {
 	for r in all clean fclean re; do
 		grep -qE "^$r[[:space:]]*:" "$ROOT/Makefile" || bad+="$r "
 	done
-	grep -qE '^(\$\(NAME\)|libft\.a)[[:space:]]*:' "$ROOT/Makefile" || bad+='$(NAME) '
+	grep -qE '^(\$\(NAME\)|\$\{NAME\}|libft\.a)[[:space:]]*:' "$ROOT/Makefile" || bad+='$(NAME) '
 	if [ -z "$bad" ]; then audit_line ok "règles \$(NAME), all, clean, fclean, re"
 	else audit_line ko "règles \$(NAME), all, clean, fclean, re" "manquantes : $bad"; fi
 
@@ -421,6 +566,7 @@ run_audit() {
 	out="$(cd "$A" && make 2>&1)"
 	if [ ! -f "$A/libft.a" ]; then
 		audit_line ko "make crée libft.a à la racine" "$(echo "$out" | grep -m2 -E '\*\*\*|No rule|error:' | cut -c1-90 | tr '\n' ' ')"
+		emit "AD"
 		return
 	fi
 	audit_line ok "make crée libft.a à la racine"
@@ -430,6 +576,7 @@ run_audit() {
 		audit_line ko "un 2e make ne relink pas" "$(echo "$out" | head -1 | cut -c1-90)"
 	else audit_line ok "un 2e make ne relink pas"; fi
 
+	sleep 1
 	touch "$A/libft.h"
 	out="$(cd "$A" && make 2>&1)"
 	if echo "$out" | grep -qE '(^|[[:space:]])(cc|gcc|clang)[[:space:]]'; then
@@ -438,16 +585,14 @@ run_audit() {
 		audit_line warn "modifier libft.h recompile les .o" "les .o ne dépendent pas de libft.h"
 	fi
 
-	nsrc=$(ls "$A"/ft_*.c 2>/dev/null | wc -l)
-	nobj=$(ar t "$A/libft.a" | wc -l)
+	nsrc=$(ls "$A"/ft_*.c 2>/dev/null | wc -l | tr -d ' ')
+	nobj=$(ar t "$A/libft.a" 2>/dev/null | grep -c '\.o$')
 	if [ "$nsrc" = "$nobj" ]; then
 		audit_line ok "libft.a contient chaque ft_*.c ($nobj objets)"
 	else audit_line ko "libft.a contient chaque ft_*.c" "$nsrc sources, $nobj objets"; fi
 
-	nm --defined-only "$A/libft.a" 2>/dev/null | awk 'NF==3 {print $3}' | sort -u > "$A/defined.txt"
-	extra="$(nm -u "$A/libft.a" 2>/dev/null | awk 'NF==2 && $1=="U" {print $2}' \
-		| sort -u | comm -23 - "$A/defined.txt" \
-		| grep -vE '^(malloc|free|write|_GLOBAL_OFFSET_TABLE_|__stack_chk_fail)$')"
+	def_syms "$A/libft.a" > "$A/defined.txt"
+	extra="$(undef_syms "$A/libft.a" | comm -23 - "$A/defined.txt" | grep -vE "$LIBC_OK")"
 	if [ -z "$extra" ]; then
 		audit_line ok "seuls malloc, free et write viennent de la libc"
 	else
@@ -472,8 +617,7 @@ run_audit() {
 		audit_line ko "aucune variable globale (sujet 4.1)" "trouvé : $extra"
 	else audit_line ok "aucune variable globale (sujet 4.1)"; fi
 
-	bad="$(cd "$ROOT" && { git ls-files 2>/dev/null || ls -A; } \
-		| grep -vE '^(ft_[a-z_0-9]+\.c|libft\.h|Makefile|README\.md|\.gitignore)$')"
+	bad="$(list_extra_files)"
 	if [ -z "$bad" ]; then
 		audit_line ok "aucun fichier en trop dans le dépôt"
 	else
@@ -487,23 +631,31 @@ run_audit() {
 	else
 		audit_line warn "README.md : 1re ligne imposée par le sujet" "attendu : *This activity has been created as part of the 42 curriculum by <login>.*"
 	fi
+	emit "AD"
+}
 
-	if [ "$CFG_NORM" != 1 ]; then
-		audit_line warn "norminette désactivée dans les paramètres"
-	elif norminette --version >/dev/null 2>&1; then
-		out="$(cd "$ROOT" && norminette ft_*.c libft.h 2>&1 | grep -c 'Error')"
-		if [ "$out" = 0 ]; then audit_line ok "norminette : aucune erreur (dossier du testeur exclu)"
-		else
-			audit_line ko "norminette : $out erreur(s)" "$(cd "$ROOT" && norminette ft_*.c libft.h 2>&1 | grep -A1 -m1 'Error!' | tr '\n' ' ' | cut -c1-100)"
-		fi
-	else audit_line warn "norminette non installée : pas vérifiée"; fi
+# fichiers rendus en trop : avec git, ceux qui sont suivis ; sans git, ceux du dossier
+# (le testeur lui-même, les .o et libft.a ne comptent pas : ils ne sont pas rendus)
+list_extra_files() {
+	local f
+	if (cd "$ROOT" && git rev-parse --is-inside-work-tree >/dev/null 2>&1); then
+		(cd "$ROOT" && git ls-files) | sed 's#/.*##' | sort -u \
+			| grep -vE '^(ft_[a-z_0-9]+\.c|libft\.h|Makefile|README\.md|\.gitignore)$'
+	else
+		for f in $(cd "$ROOT" && ls -A); do
+			case "$f" in
+				ft_*.c|libft.h|Makefile|README.md|.gitignore|testeur_des_fous|*.o|libft.a) ;;
+				*) echo "$f" ;;
+			esac
+		done
+	fi
 }
 
 run_all() {
-	local n f p st msg
+	local n f p st msg part list
 
-	if (cd "$ROOT" && git ls-files --error-unmatch testeur_des_fous >/dev/null 2>&1) \
-		|| (cd "$ROOT" && [ -n "$(git ls-files testeur_des_fous 2>/dev/null)" ]); then
+	start_norm
+	if (cd "$ROOT" && [ -n "$(git ls-files testeur_des_fous 2>/dev/null | head -1)" ]); then
 		emit "G	testeur_des_fous/ est suivi par git : retire-le avant de rendre (git rm -r --cached testeur_des_fous)"
 	fi
 	if [ -d "$ROOT/.git" ] && ! grep -qs 'testeur_des_fous' "$ROOT/.gitignore"; then
@@ -517,25 +669,25 @@ run_all() {
 		esac
 	done
 
-	emit "S	vérification des 43 prototypes (sujet v1.3)"
+	emit "S	vérification des 43 prototypes"
 	header
 	for n in $PART1 $PART2 $PART3; do
 		wait_slot
 		check_proto "$n" &
 	done
 	wait
-	section "Prototypes · sujet v1.3"
+	section "Prototypes · sujet"
 	p=0
 	for n in $PART1 $PART2 $PART3; do
 		IFS=$'\t' read -r st msg < "$BUILD/proto/$n"
 		emit "P	$n	$st	$msg"
 		if [ "$st" != ok ]; then
-			((p++))
+			p=$((p + 1))
 			say '  %s  %s%-18s%s %s%s%s\n' "$(pill "$P_KO" PROTO)" "$TXT" "ft_$n" "$R" "$D" "$msg" "$R"
 		fi
 	done
-	[ "$p" = 0 ] && say '  %s  %s43 prototypes conformes au sujet v1.3%s\n' "$(pill "$P_OK" OK)" "$TXT" "$R"
-	if (cd "$ROOT" && $CC -fsyntax-only -DF_t_list -I "$ROOT" "$SRC/protos.c" >/dev/null 2>&1); then :; else
+	[ "$p" = 0 ] && say '  %s  %s43 prototypes conformes au sujet%s\n' "$(pill "$P_OK" OK)" "$TXT" "$R"
+	if [ -f "$ROOT/libft.h" ] && ! $CC -fsyntax-only -DF_t_list -I "$ROOT" "$SRC/protos.c" >/dev/null 2>&1; then
 		emit "G	t_list ne correspond pas au sujet : typedef struct s_list { void *content; struct s_list *next; } t_list;"
 		say '  %s  %st_list différent du sujet%s\n' "$(pill "$P_KO" PROTO)" "$TXT" "$R"
 	fi
@@ -546,8 +698,11 @@ run_all() {
 		[ -f "$f" ] || continue
 		wait_slot
 		compile_obj "$f" &
+		if [ "$VALG" = 1 ]; then wait_slot; compile_vg "$f" & fi
 	done
 	wait
+	make_archive "$BUILD/obj" "$BUILD/libtest.a"
+	[ "$VALG" = 1 ] && make_archive "$BUILD/vg" "$BUILD/libvg.a"
 	for n in $PART1 $PART2 $PART3; do
 		wanted "$n" || continue
 		[ -f "$BUILD/obj/ft_$n.o" ] || continue
@@ -555,14 +710,9 @@ run_all() {
 		build_bin "$n" &
 	done
 	wait
-	if [ "$VALG" = 1 ] && [ -z "$(ls "$BUILD"/plain 2>/dev/null)" ]; then
-		for f in "$ROOT"/ft_*.c; do [ -f "$f" ] && compile_plain "$f" & done
-		wait
-	fi
 
-	export ASAN_OPTIONS="exitcode=77:detect_leaks=1:allocator_may_return_null=1:abort_on_error=0:strict_string_checks=1:detect_stack_use_after_return=1:log_path=$BUILD/log/san"
-	export UBSAN_OPTIONS="exitcode=77:print_stacktrace=1:log_path=$BUILD/log/san"
-	export LSAN_OPTIONS="exitcode=77:log_path=$BUILD/log/san"
+	export ASAN_OPTIONS="exitcode=77:detect_leaks=0:allocator_may_return_null=1:abort_on_error=0:strict_string_checks=1:detect_stack_use_after_return=1:log_path=$BUILD/log/san"
+	export UBSAN_OPTIONS="exitcode=77:print_stacktrace=1:abort_on_error=1:log_path=$BUILD/log/san"
 
 	for part in 1 2 3; do
 		case $part in
@@ -575,11 +725,13 @@ run_all() {
 				emit "S	test de ft_$n"
 				run_one "$n"
 			else
-				DET=("non sélectionnée")
 				emit "T	$n	skip	0	0	non sélectionnée"
 			fi
 		done
 	done
+
+	emit "S	norminette"
+	finish_norm
 
 	if [ "$CFG_AUDIT" = 2 ]; then
 		section "Audit · ce que la moulinette regarde"
@@ -598,9 +750,10 @@ run_all() {
 	if [ "$CI" = 1 ]; then
 		printf '\n  %s' "$D"; rule 58; printf '%s\n\n' "$R"
 		printf '  %s%d OK%s' "$F_OK$B" "$n_ok" "$R"
+		[ "$n_warn" -gt 0 ] && printf '   %s(dont %d avec une remarque)%s' "$F_LK" "$n_warn" "$R"
 		[ "$n_bad" -gt 0 ] && printf '   %s%d en échec%s' "$F_KO$B" "$n_bad" "$R"
 		[ "$n_skip" -gt 0 ] && printf '   %s%d pas encore écrites%s' "$D" "$n_skip" "$R"
-		[ "$p" -gt 0 ] && printf '   %s%d prototype(s) différent(s) du sujet v1.3%s' "$F_KO$B" "$p" "$R"
+		[ "$p" -gt 0 ] && printf '   %s%d prototype(s) différent(s) du sujet%s' "$F_KO$B" "$p" "$R"
 		[ "$n_audit_ko" -gt 0 ] && printf '   %s%d contrôles d'"'"'audit en échec%s' "$F_KO$B" "$n_audit_ko" "$R"
 		printf '\n'
 		grep '^G	' "$RES" | cut -f2 | while IFS= read -r l; do printf '  %s! %s%s\n' "$F_LK" "$l" "$R"; done
@@ -618,14 +771,16 @@ EXOS=(strrev strspn memrchr strcasecmp memswap bitcount atoi_base strndup itoa_b
 	lstremove_if lstsort lst_to_array lstrotate)
 
 run_exo() {
-	local idx fn dir file out nout c b objs=() xobjs=() extra code marker checks fails l st
+	local idx fn dir file out nout c b xobjs=() extra code marker checks fails l st
+	case "$EXO" in ''|*[!0-9]*) echo "niveau inconnu : $EXO"; return 2 ;; esac
 	idx=$((10#$EXO))
 	[ "$idx" -ge 1 ] && [ "$idx" -le 21 ] || { echo "niveau inconnu : $EXO"; return 2; }
 	EXO="$(printf '%02d' "$idx")"
 	fn="ft_${EXOS[$((idx - 1))]}"
-	out="${EXO_OUT:-/dev/stdout}"
-	[ "$out" = /dev/stdout ] || : > "$out"
-	xemit() { printf '%s\n' "$*" >> "$out"; }
+	out="$EXO_OUT"
+	[ -z "$out" ] || : > "$out"
+	xemit() { if [ -n "$out" ]; then printf '%s\n' "$*" >> "$out"; else printf '%s\n' "$*"; fi; }
+	xemit_all() { while IFS= read -r l; do xemit "$l"; done; }
 	dir="$HERE/entrainement/niveau_$EXO"
 	file="$dir/$fn.c"
 	if [ ! -f "$file" ]; then
@@ -633,16 +788,16 @@ run_exo() {
 		xemit "D	fichier introuvable : testeur_des_fous/entrainement/niveau_$EXO/$fn.c"
 		return 1
 	fi
-	if ! norminette --version >/dev/null 2>&1; then
+	if [ -z "$NORM_CMD" ]; then
 		xemit "X	norme	0"
 		xemit "D	norminette introuvable : la Norme est obligatoire à l'entraînement"
-		xemit "D	installe-la (pip install norminette) ou lance le testeur sur un poste 42"
+		xemit "D	installe-la (python3 -m pip install --user norminette) ou lance le testeur sur un poste 42"
 		return 1
 	fi
-	nout="$(cd "$dir" && norminette *.c 2>&1)"
+	nout="$(cd "$dir" && $NORM_CMD *.c 2>&1)"
 	if echo "$nout" | grep -q 'Error'; then
 		xemit "X	norme	0"
-		echo "$nout" | grep 'Error' | head -7 | tr '\t' ' ' | sed -e 's/\x1b\[[0-9;]*m//g' -e 's/^ */D	/' >> "$out"
+		echo "$nout" | grep 'Error' | head -7 | tr '\t' ' ' | sed -e $'s/\x1b\\[[0-9;]*m//g' -e 's/^ */D	/' | xemit_all
 		return 1
 	fi
 	mkdir -p "$BUILD/x"
@@ -650,15 +805,15 @@ run_exo() {
 		b="$(basename "$c" .c)"
 		if ! $CC -Wall -Wextra -Werror -I "$ROOT" -c "$c" -o "$BUILD/x/plain_$b.o" 2> "$BUILD/x/$b.err"; then
 			xemit "X	build	0"
-			grep -E 'error|warning' "$BUILD/x/$b.err" | sed -E 's/^.*\/(ft_)/\1/' | head -5 | sed 's/^/D	/' >> "$out"
+			grep -E 'error|warning' "$BUILD/x/$b.err" | sed -E 's/^.*\/(ft_)/\1/' | head -5 | sed 's/^/D	/' | xemit_all
 			return 1
 		fi
-		$CC -Wall -Wextra -Werror -g $SAN -I "$ROOT" -c "$c" -o "$BUILD/x/san_$b.o" 2>/dev/null
+		$CC -Wall -Wextra -Werror -g $SAN "${HOOK[@]}" -I "$ROOT" -c "$c" -o "$BUILD/x/san_$b.o" 2>/dev/null
 		xobjs+=("$BUILD/x/san_$b.o")
 	done
-	nm --defined-only "$BUILD"/x/plain_*.o 2>/dev/null | awk 'NF==3 {print $3}' | sort -u > "$BUILD/x/def"
-	extra="$(nm -u "$BUILD"/x/plain_*.o 2>/dev/null | awk '{print $NF}' | sort -u | comm -23 - "$BUILD/x/def" \
-		| grep -vE '^(malloc|free|write|ft_[a-z_0-9]+|_GLOBAL_OFFSET_TABLE_|__stack_chk_fail)$')"
+	def_syms "$BUILD"/x/plain_*.o > "$BUILD/x/def"
+	extra="$(undef_syms "$BUILD"/x/plain_*.o | comm -23 - "$BUILD/x/def" \
+		| grep -vE "$LIBC_OK" | grep -vE '^ft_[a-z_0-9]+$')"
 	if [ -n "$extra" ]; then
 		xemit "X	interdit	0"
 		xemit "D	fonctions interdites : $(echo $extra | tr '\n' ' ')"
@@ -667,19 +822,16 @@ run_exo() {
 	fi
 	for c in "$ROOT"/ft_*.c; do
 		[ -f "$c" ] || continue
+		[ "$(basename "$c" .c)" = "$fn" ] && continue
 		wait_slot
 		compile_obj "$c" &
 	done
 	wait
-	for o in "$BUILD"/obj/*.o; do
-		[ -f "$o" ] || continue
-		[ "$(basename "$o")" = "$fn.o" ] && continue
-		objs+=("$o")
-	done
-	if ! $CC -g -w $SAN -DX_"$EXO" -I "$ROOT" "$SRC/exos.c" "${xobjs[@]}" "${objs[@]}" \
-		-Wl,--wrap=malloc -o "$BUILD/x/bin" 2> "$BUILD/x/link.err"; then
+	make_archive "$BUILD/obj" "$BUILD/libtest.a"
+	if ! $CC -g -w $SAN -DX_"$EXO" -I "$ROOT" "$SRC/exos.c" "${xobjs[@]}" "$BUILD/libtest.a" \
+		$LDX -o "$BUILD/x/bin" 2> "$BUILD/x/link.err"; then
 		xemit "X	build	0"
-		grep -E 'undefined|error' "$BUILD/x/link.err" | sed -E 's/^.*\/(ft_|exos)/\1/' | head -4 | sed 's/^/D	/' >> "$out"
+		grep -E 'undefined|error' "$BUILD/x/link.err" | sed -E 's/^.*\/(ft_|exos)/\1/' | head -4 | sed 's/^/D	/' | xemit_all
 		return 1
 	fi
 	mkdir -p "$BUILD/log"
@@ -687,7 +839,7 @@ run_exo() {
 	export ASAN_OPTIONS="exitcode=77:detect_leaks=1:allocator_may_return_null=1:abort_on_error=0:log_path=$BUILD/log/san"
 	export UBSAN_OPTIONS="exitcode=77:print_stacktrace=1:log_path=$BUILD/log/san"
 	export LSAN_OPTIONS="exitcode=77:log_path=$BUILD/log/san"
-	timeout "$TMO" "$BUILD/x/bin" > "$BUILD/x/out" 2> "$BUILD/x/err"
+	with_timeout "$TMO" "$BUILD/x/bin" > "$BUILD/x/out" 2> "$BUILD/x/err"
 	code=$?
 	cat "$BUILD"/log/san.* "$BUILD/x/err" > "$BUILD/x/san" 2>/dev/null
 	marker="$(grep '^@@ ' "$BUILD/x/out" | tail -1)"
@@ -713,7 +865,7 @@ run_exo() {
 		while IFS= read -r l; do DET+=("$l"); done < <(head -3 "$BUILD/x/err")
 	fi
 	xemit "X	$st	${checks:-0}"
-	for l in "${DET[@]}"; do xemit "D	$(printf '%s' "$l" | tr '\t' ' ')"; done
+	for l in ${DET[@]+"${DET[@]}"}; do xemit "D	$(printf '%s' "$l" | tr '\t' ' ')"; done
 	[ "$st" = ok ]
 }
 
@@ -744,9 +896,11 @@ first=1
 while :; do
 	if [ "$first" = 0 ]; then
 		rm -rf "$BUILD"/obj "$BUILD"/bin "$BUILD"/log "$BUILD"/plain "$BUILD"/proto \
-			"$BUILD"/vg "$BUILD"/audit "$BUILD"/san_* "$BUILD"/out_* "$BUILD"/err_*
+			"$BUILD"/vg "$BUILD"/audit "$BUILD"/san_* "$BUILD"/out_* "$BUILD"/err_* \
+			"$BUILD"/norm.* "$BUILD"/lib*.a
 		mkdir -p "$BUILD/obj" "$BUILD/bin" "$BUILD/log" "$BUILD/plain" "$BUILD/proto" "$BUILD/vg"
 		: > "$RES"
+		n_ok=0; n_bad=0; n_skip=0; n_warn=0; n_seen=0; n_audit_ko=0; n_norm_ko=0
 		printf '\e[0m\e[2J\e[H\n  \e[38;5;213mLe testeur des fous\e[0m · recompilation...'
 		if ! build_game; then
 			printf '\r\e[K  le jeu ne compile plus :\n'
